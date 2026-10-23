@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Train Like Nils</title>
+  <meta name="description" content="Pick how much of Nils van der Poel's training you want, translated to running, and get a week-by-week plan for your goal race.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="page">
+    <header class="intro">
+      <p class="kicker">Based on Nils van der Poel’s “How to skate a 10k”</p>
+      <h1>Train like Nils</h1>
+      <p class="lede">Two Olympic golds came from a very simple plan: train five days, rest two, and pile on the hours. Pick how much of it you want, translated to running, and get a week-by-week plan for your race.</p>
+    </header>
+
+    <section class="card controls" aria-label="Plan settings">
+      <div class="field dose">
+        <div class="dose-head">
+          <label for="dose">How much Nils?</label>
+          <output id="dose-out" for="dose">30 %</output>
+        </div>
+        <input type="range" id="dose" min="10" max="100" step="5" value="30" aria-describedby="dose-hint">
+        <div class="dose-scale" aria-hidden="true"><span>10 %</span><span>50 %</span><span>100 %</span></div>
+        <p class="hint" id="dose-hint"></p>
+      </div>
+
+      <div class="field">
+        <label for="now">Running now <span class="opt">optional</span></label>
+        <div class="unit-input">
+          <input id="now" class="text-input" type="number" min="0" max="40" step="0.5" inputmode="decimal" placeholder="4" aria-describedby="now-hint">
+          <span>h a week</span>
+        </div>
+        <p class="hint" id="now-hint"></p>
+      </div>
+
+      <fieldset class="field">
+        <legend>Goal race</legend>
+        <div class="chips" id="race">
+          <label><input type="radio" name="race" value="10k"><span>10K</span></label>
+          <label><input type="radio" name="race" value="half"><span>Half marathon</span></label>
+          <label><input type="radio" name="race" value="marathon"><span>Marathon</span></label>
+          <label><input type="radio" name="race" value="50k"><span>50K</span></label>
+          <label><input type="radio" name="race" value="100k"><span>100K</span></label>
+          <label><input type="radio" name="race" value="100mi"><span>100 miles</span></label>
+        </div>
+      </fieldset>
+
+      <div class="field-row">
+        <div class="field">
+          <label for="time">Goal time <span class="opt">optional</span></label>
+          <input id="time" class="text-input" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="3:30:00" aria-describedby="time-hint">
+          <p class="hint" id="time-hint">Gives you paces. Without it, sessions are described by effort.</p>
+        </div>
+
+        <fieldset class="field">
+          <legend>Plan</legend>
+          <div class="chips" id="mode">
+            <label><input type="radio" name="mode" value="race"><span>Build to race</span></label>
+            <label><input type="radio" name="mode" value="cycle"><span>12-week cycle</span></label>
+            <label><input type="radio" name="mode" value="year"><span>Full year</span></label>
+            <label><input type="radio" name="mode" value="season"><span>One season</span></label>
+          </div>
+
+          <div class="mode-extra" id="extra-race">
+            <span class="sub-label" id="weeks-label">Weeks until race</span>
+            <div class="stepper" role="group" aria-labelledby="weeks-label">
+              <button type="button" id="weeks-dec" aria-label="Fewer weeks">−</button>
+              <input id="weeks" type="number" min="8" max="30" step="1" value="16" aria-labelledby="weeks-label">
+              <button type="button" id="weeks-inc" aria-label="More weeks">+</button>
+            </div>
+          </div>
+
+          <div class="mode-extra" id="extra-season" hidden>
+            <span class="sub-label">4 weeks of</span>
+            <div class="chips chips-sm" id="season">
+              <label><input type="radio" name="season" value="aerobic"><span>Aerobic</span></label>
+              <label><input type="radio" name="season" value="threshold"><span>Threshold</span></label>
+              <label><input type="radio" name="season" value="specific"><span>Specific</span></label>
+            </div>
+          </div>
+
+          <p class="hint" id="mode-hint"></p>
+        </fieldset>
+      </div>
+
+      <div class="field switch-field">
+        <label class="switch">
+          <input type="checkbox" id="strength" checked>
+          <span class="switch-track" aria-hidden="true"></span>
+          <span class="switch-label">Strength work</span>
+        </label>
+        <p class="hint">Like his 2019–20 build-up: one-legged squats and heavy lifts in the Aerobic phase, one squat session a week in Threshold, then just 5 min of core and stretching once racing starts.</p>
+      </div>
+    </section>
+
+    <section class="paces" id="paces" aria-label="Your paces"></section>
+
+    <section class="card overview" aria-labelledby="overview-title">
+      <div class="section-head">
+        <h2 id="overview-title">Overview</h2>
+        <p class="summary" id="summary"></p>
+      </div>
+      <div class="chart" id="chart"></div>
+      <ul class="legend" id="legend"></ul>
+    </section>
+
+    <section class="weeks-section" aria-labelledby="weeks-title">
+      <div class="section-head">
+        <h2 id="weeks-title">Week by week</h2>
+        <div class="actions">
+          <button type="button" class="link-btn" id="toggle-all">Expand all</button>
+          <button type="button" class="link-btn" id="print">Print</button>
+        </div>
+      </div>
+      <div class="weeks" id="week-list"></div>
+    </section>
+
+    <section class="card rules" aria-labelledby="rules-title">
+      <h2 id="rules-title">Nils’s rules</h2>
+      <ul>
+        <li><strong>Train five days, rest two.</strong> Monday to Friday on, the weekend fully off. Use the free time to have a life outside running. Nils says that is what kept him going.</li>
+        <li><strong>Stick to the Limit.</strong> Train close to it, never past it. If your pace at normal effort drops more than about 3 %, stop the session and take two rest days.</li>
+        <li><strong>Test yourself every day.</strong> The warm-up ends with 5 steady minutes. Note your heart rate there. A lower response than usual means a tired body.</li>
+        <li><strong>Ease into every phase.</strong> The first week of each phase is lighter on purpose.</li>
+        <li><strong>Race pace means race pace.</strong> On specific days, hit the pace and put the easy running after the fast part, never before.</li>
+        <li><strong>Long days, two sessions.</strong> When a day passes 2½ hours, split it with a proper lunch in between.</li>
+        <li><strong>Sick? Rest.</strong> Stay off until you are healthy, test with an easy session, and never try to catch up on missed training.</li>
+        <li><strong>Fuel the work.</strong> Take carbs during every hard session. Eat more in big weeks.</li>
+        <li><strong>Build strength, then let it go.</strong> He rebuilt his legs with one-legged squats and some heavy lifting early on, then dropped it and lost about 25 % of his max squat, which didn’t matter for a 10k. Keep five minutes of core and stretching a week as prehab.</li>
+        <li><strong>Keep it simple.</strong> Cut anything that steals time from the key sessions.</li>
+        <li><strong>Easy hours can be biked.</strong> 1 h of running ≈ 1 h 20 min on the bike, if your legs need a break from the pounding.</li>
+        <li><strong>After the race: Aerobic 2.0.</strong> Two weeks of easy volume only before you train hard again.</li>
+      </ul>
+    </section>
+
+    <footer class="footer">
+      <p>Nils wrote his program for himself: an elite adult who already had a big training base. He says most athletes can’t copy it straight away. Scale it, ease in, and talk to a doctor if you have health concerns. 100 % ≈ the 25 h of running a week he said he would have done instead of 33 h on the bike. This site isn’t affiliated with Nils van der Poel.</p>
+    </footer>
+  </main>
+
+  <div class="tooltip" id="tooltip" role="status" hidden></div>
+
+  <script src="plan.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
