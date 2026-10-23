@@ -318,38 +318,20 @@
   }
 
   // --- Fuel -----------------------------------------------------------------------
-  // "I made sure to always have some sugars with me whilst training and not run out
-  // of energy during a session." Days you must eat on get a badge; shorter hard
-  // sessions just get a reminder to carry something. Gram targets are general
-  // sports-nutrition guidance, not from the document.
-  const FUEL_LONG = 90;
-
-  function longestSession(day) {
-    let longest = 0;
-    let current = 0;
-    for (const b of day.blocks) {
-      if (b.zone === 'strength') continue;
-      if (b.session === 'PM') { longest = Math.max(longest, current); current = 0; }
-      current += b.min;
-    }
-    return Math.max(longest, current);
-  }
-
+  // True to the document: sugar is for the hard work. "I made sure to always have
+  // some sugars with me whilst training and not run out of energy during a session."
+  // Easy hours ran on normal food, with "a proper lunch" between long sessions.
   function fuelFor(day, race) {
-    const ultraGoal = race.km >= 50;
     if (day.type === 'race') {
       const km = day.goal ? race.km : race.km >= 42 ? 21 : 10; // tune-ups are a half or longer for marathon+
-      return km >= 21 ? { badge: true, text: 'Eat from the start, every 20–30 min. Don’t wait until you’re hungry.' } : null;
+      return km >= 21 ? { badge: true, text: 'Fuel like you practised. Start early, before you get hungry.' } : null;
     }
-    if (day.type === 'rehearsal') return { badge: true, text: 'Practise race food: eat every 20–30 min, 60–90 g carbs an hour.' };
-    const hard = day.type === 'threshold' || day.type === 'specific' || day.type === 'speed';
-    if (longestSession(day) >= FUEL_LONG) {
-      const amount = ultraGoal
-        ? 'build toward race-day amounts (60–90 g carbs an hour)'
-        : 'about 30–60 g carbs an hour';
-      return { badge: true, text: hard ? `Carry sugar for the hard part, then eat every 20–30 min, ${amount}.` : `Eat every 20–30 min, ${amount}.` };
+    if (day.type === 'rehearsal') return { badge: true, text: 'Eat what you’ll eat on race day. You get good at what you train.' };
+    if (day.type === 'threshold' || day.type === 'specific' || day.type === 'speed') {
+      return { badge: true, text: 'Carry some sugar. Running out costs you the session and extra recovery.' };
     }
-    return hard ? { badge: false, text: 'Carry some sugar for the hard part.' } : null;
+    if (day.blocks.some((b) => b.session === 'PM')) return { badge: false, text: 'Have a proper lunch between the sessions.' };
+    return null;
   }
 
   // --- Weeks ------------------------------------------------------------------
