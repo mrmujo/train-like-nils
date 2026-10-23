@@ -127,9 +127,34 @@
         <div class="actions">
           <button type="button" class="link-btn" id="toggle-all">Expand all</button>
           <button type="button" class="link-btn" id="print">Print</button>
+          <a class="link-btn" href="#export">Send to Garmin</a>
         </div>
       </div>
       <div class="weeks" id="week-list"></div>
+    </section>
+
+    <section class="card export" id="export" aria-labelledby="export-title">
+      <h2 id="export-title">Send to your Garmin</h2>
+      <p class="export-lede">Through <a href="https://intervals.icu" target="_blank" rel="noopener">intervals.icu</a> (free). Every session lands in your Garmin calendar with pace targets, and the watch shows it as the day’s workout. The steady test is its own step, so it gets its own lap.</p>
+      <ol class="export-steps">
+        <li>Sign up at intervals.icu. In <strong>Settings</strong>, connect Garmin Connect and tick <strong>Upload planned workouts</strong>.</li>
+        <li>Further down in Settings, under <strong>Developer settings</strong>, copy your API key.</li>
+        <li>Pick when week 1 starts, paste the key and send.</li>
+      </ol>
+      <div class="export-row">
+        <div class="field">
+          <label for="start">Week 1 starts</label>
+          <input type="date" id="start" class="text-input">
+        </div>
+        <div class="field">
+          <label for="apikey">intervals.icu API key</label>
+          <input type="password" id="apikey" class="text-input" autocomplete="off" spellcheck="false">
+        </div>
+      </div>
+      <p class="hint" id="export-dates"></p>
+      <button type="button" class="primary-btn" id="send">Send to intervals.icu</button>
+      <p class="export-status" id="export-status" role="status" aria-live="polite"></p>
+      <p class="hint">Your key goes straight from this page to intervals.icu and isn’t saved. intervals.icu uploads the coming week to Garmin Connect, so sync your watch to get it. Sending again with the same start date updates the workouts instead of duplicating them. If you change the plan’s length or start date, delete the old ones in intervals.icu.</p>
     </section>
 
     <section class="card rules" aria-labelledby="rules-title">
@@ -159,6 +184,7 @@
   <div class="tooltip" id="tooltip" role="status" hidden></div>
 
   <script src="plan.js"></script>
+  <script src="intervals.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

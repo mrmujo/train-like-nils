@@ -383,6 +383,7 @@
       currentHours: currentHours(),
     });
     renderNowHint();
+    renderExportDates();
     renderPaces();
     renderOverview();
     renderWeeks();
@@ -407,6 +408,71 @@
     else {
       const top = plan.weeks.reduce((a, w) => Math.max(a, w.p), 0);
       hint.textContent = `Climbing 10 % a week, this plan tops out at ${Math.round(top * 100)} % Nils. Pick more weeks or a lower target to get there.`;
+    }
+  }
+
+  // --- Send to intervals.icu ------------------------------------------------------
+  const I = window.NilsIntervals;
+
+  function isoToday() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
+  function fmtDate(iso) {
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+  }
+
+  function startDate() {
+    const v = $('#start').value;
+    return /^\d{4}-\d{2}-\d{2}$/.test(v) ? I.mondayOf(v) : null;
+  }
+
+  function renderExportDates() {
+    const hint = $('#export-dates');
+    const start = startDate();
+    if (!start) { hint.textContent = 'Pick a date. Week 1 always starts on a Monday.'; return; }
+    const end = I.addDays(start, plan.weeks.length * 7 - 1);
+    const hasRace = plan.weeks.some((w) => w.days.some((d) => d.goal));
+    const snapped = start !== $('#start').value ? ' (moved to that week’s Monday)' : '';
+    hint.textContent = `Week 1 starts ${fmtDate(start)}${snapped}. ${hasRace ? `Race day: ${fmtDate(end)}.` : `Week ${plan.weeks.length} ends ${fmtDate(end)}.`}`;
+  }
+
+  function setStatus(text, error) {
+    const el = $('#export-status');
+    el.textContent = text;
+    el.classList.toggle('error', Boolean(error));
+  }
+
+  async function sendToIntervals() {
+    const key = $('#apikey').value.trim();
+    const start = startDate();
+    if (!start) return setStatus('Pick when week 1 starts.', true);
+    if (!key) return setStatus('Paste your intervals.icu API key first.', true);
+    const events = I.buildEvents(plan, start);
+    const button = $('#send');
+    button.disabled = true;
+    setStatus(`Sending ${events.length} sessions…`);
+    try {
+      const res = await fetch(I.ENDPOINT, {
+        method: 'POST',
+        headers: { Authorization: `Basic ${btoa(`API_KEY:${key}`)}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(events),
+      });
+      if (res.status === 401 || res.status === 403) {
+        setStatus('intervals.icu didn’t accept that API key. Copy it again from Settings → Developer settings.', true);
+      } else if (!res.ok) {
+        const text = (await res.text()).slice(0, 200);
+        setStatus(`intervals.icu answered ${res.status}${text ? `: ${text}` : ''}`, true);
+      } else {
+        const saved = await res.json();
+        setStatus(`Done: ${Array.isArray(saved) ? saved.length : events.length} sessions are in your intervals.icu calendar, ${fmtDate(start)} to ${fmtDate(I.addDays(start, plan.weeks.length * 7 - 1))}. Check them there, then sync your watch.`);
+      }
+    } catch (err) {
+      setStatus('Couldn’t reach intervals.icu. Check your connection and try again.', true);
+    } finally {
+      button.disabled = false;
     }
   }
 
@@ -448,6 +514,9 @@
     });
 
     $('#print').addEventListener('click', () => window.print());
+    $('#start').value = I.mondayOf(I.addDays(isoToday(), 6)); // the coming Monday, or today if it is one
+    $('#start').addEventListener('change', renderExportDates);
+    $('#send').addEventListener('click', sendToIntervals);
 
     // Closed <details> don't print, so open everything for the printout.
     let before = null;

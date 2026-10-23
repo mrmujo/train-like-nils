@@ -174,7 +174,8 @@
   }
 
   function set(reps, len, rest, zone) {
-    return block(reps * len + (reps - 1) * rest, `${reps} × ${fmtRep(len)}`, zone, `${fmtRep(rest)} jog between`);
+    const b = block(reps * len + (reps - 1) * rest, `${reps} × ${fmtRep(len)}`, zone, `${fmtRep(rest)} jog between`);
+    return Object.assign(b, { reps, len, rest });
   }
 
   function makeDay(type, title, blocks, note) {
@@ -226,7 +227,7 @@
   }
 
   function setBreak(ctx, minutes, detail) {
-    return block(snap(minutes * Math.max(ctx.p, 1 / 3), DURATIONS), 'Easy between sets', 'easy', detail);
+    return Object.assign(block(snap(minutes * Math.max(ctx.p, 1 / 3), DURATIONS), 'Easy between sets', 'easy', detail), { kind: 'break' });
   }
 
   // Nils's 10k session: 2 sets of 3 × 8 laps at race pace, 30 min easy between.
