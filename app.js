@@ -445,34 +445,100 @@
     el.classList.toggle('error', Boolean(error));
   }
 
-  async function sendToIntervals() {
+  // A message meant for the person, as opposed to a network failure.
+  class ApiError extends Error {}
+
+  async function call(url, method, key, body) {
+    const res = await fetch(url, {
+      method,
+      headers: { Authorization: `Basic ${btoa(`API_KEY:${key}`)}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (res.status === 401 || res.status === 403) {
+      throw new ApiError('intervals.icu didn’t accept that API key. Copy it again from Settings → Developer settings.');
+    }
+    const text = await res.text();
+    if (!res.ok) throw new ApiError(`intervals.icu answered ${res.status}${text ? `: ${text.slice(0, 200)}` : ''}`);
+    try { return JSON.parse(text); } catch (e) { return text; }
+  }
+
+  // Removes every Train like Nils session from today on. Returns how many
+  // intervals.icu says it deleted, or null when it doesn't say.
+  async function clearFuture(key) {
+    let removed = 0;
+    let known = true;
+    for (const batch of I.clearBatches(isoToday())) {
+      const r = await call(I.DELETE_ENDPOINT, 'PUT', key, batch);
+      const n = typeof r === 'number' ? r : Number(r && (r.count !== undefined ? r.count : r.deleted));
+      if (Number.isFinite(n)) removed += n; else known = false;
+    }
+    return known ? removed : null;
+  }
+
+  function apiKey() {
     const key = $('#apikey').value.trim();
+    if (!key) setStatus('Paste your intervals.icu API key first.', true);
+    return key;
+  }
+
+  function busy(on) {
+    $('#send').disabled = on;
+    $('#remove').disabled = on;
+  }
+
+  const NETWORK_ERROR = 'Couldn’t reach intervals.icu. Check your connection and try again.';
+
+  async function sendToIntervals() {
     const start = startDate();
     if (!start) return setStatus('Pick when week 1 starts.', true);
-    if (!key) return setStatus('Paste your intervals.icu API key first.', true);
+    const key = apiKey();
+    if (!key) return;
     const events = I.buildEvents(plan, start);
-    const button = $('#send');
-    button.disabled = true;
-    setStatus(`Sending ${events.length} sessions…`);
+    let cleared = false;
+    busy(true);
     try {
-      const res = await fetch(I.ENDPOINT, {
-        method: 'POST',
-        headers: { Authorization: `Basic ${btoa(`API_KEY:${key}`)}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(events),
-      });
-      if (res.status === 401 || res.status === 403) {
-        setStatus('intervals.icu didn’t accept that API key. Copy it again from Settings → Developer settings.', true);
-      } else if (!res.ok) {
-        const text = (await res.text()).slice(0, 200);
-        setStatus(`intervals.icu answered ${res.status}${text ? `: ${text}` : ''}`, true);
-      } else {
-        const saved = await res.json();
-        setStatus(`Done: ${Array.isArray(saved) ? saved.length : events.length} sessions are in your intervals.icu calendar, ${fmtDate(start)} to ${fmtDate(I.addDays(start, plan.weeks.length * 7 - 1))}. Check them there, then sync your watch.`);
-      }
+      setStatus('Clearing old Train like Nils sessions…');
+      const removed = await clearFuture(key);
+      cleared = true;
+      setStatus(`Sending ${events.length} sessions…`);
+      const saved = await call(I.ENDPOINT, 'POST', key, events);
+      const count = Array.isArray(saved) ? saved.length : events.length;
+      const old = removed ? `Replaced ${removed} old sessions. ` : '';
+      const end = I.addDays(start, plan.weeks.length * 7 - 1);
+      setStatus(`Done. ${old}${count} sessions are in your intervals.icu calendar, ${fmtDate(start)} to ${fmtDate(end)}. Check them there, then sync your watch.`);
     } catch (err) {
-      setStatus('Couldn’t reach intervals.icu. Check your connection and try again.', true);
+      const why = err instanceof ApiError ? err.message : NETWORK_ERROR;
+      setStatus(cleared ? `The old sessions were removed, but the new plan wasn’t sent. ${why} Press Send again.` : why, true);
     } finally {
-      button.disabled = false;
+      busy(false);
+    }
+  }
+
+  let removeArmed = null;
+
+  async function removeFromIntervals() {
+    const button = $('#remove');
+    const key = apiKey();
+    if (!key) return;
+    if (!removeArmed) {
+      button.textContent = 'Click again to remove';
+      removeArmed = setTimeout(() => { removeArmed = null; button.textContent = 'Remove from intervals.icu'; }, 5000);
+      return;
+    }
+    clearTimeout(removeArmed);
+    removeArmed = null;
+    button.textContent = 'Remove from intervals.icu';
+    busy(true);
+    try {
+      setStatus('Removing future Train like Nils sessions…');
+      const removed = await clearFuture(key);
+      setStatus(removed === null
+        ? 'Done. All future Train like Nils sessions are removed from intervals.icu.'
+        : `Done. Removed ${removed} future Train like Nils sessions from intervals.icu.`);
+    } catch (err) {
+      setStatus(err instanceof ApiError ? err.message : NETWORK_ERROR, true);
+    } finally {
+      busy(false);
     }
   }
 
@@ -517,6 +583,7 @@
     $('#start').value = I.mondayOf(I.addDays(isoToday(), 6)); // the coming Monday, or today if it is one
     $('#start').addEventListener('change', renderExportDates);
     $('#send').addEventListener('click', sendToIntervals);
+    $('#remove').addEventListener('click', removeFromIntervals);
 
     // Closed <details> don't print, so open everything for the printout.
     let before = null;

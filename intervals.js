@@ -8,7 +8,12 @@
   const P = typeof module !== 'undefined' && module.exports ? require('./plan.js') : root.NilsPlan;
 
   const ENDPOINT = 'https://intervals.icu/api/v1/athlete/0/events/bulk?upsert=true';
+  const DELETE_ENDPOINT = 'https://intervals.icu/api/v1/athlete/0/events/bulk-delete';
   const ID_PREFIX = 'train-like-nils';
+  // Every event we create gets an id from its date and one of these slots, so
+  // old sessions can be removed later without remembering what was sent.
+  const SLOTS = ['run1', 'run2', 'strength1', 'strength2', 'race'];
+  const CLEAR_DAYS = 800; // covers a full-year plan starting up to a year ahead
 
   // intervals.icu durations: "1h15m", "5m", "1m30s", "45s".
   function dur(min) {
@@ -131,6 +136,22 @@
     return events;
   }
 
+  /**
+   * Batches of { external_id } covering every slot from `fromDate` for `days` days.
+   * intervals.icu ignores ids that don't exist and never touches other events.
+   */
+  function clearBatches(fromDate, days, batchSize) {
+    const ids = [];
+    for (let i = 0; i < (days || CLEAR_DAYS); i++) {
+      const date = addDays(fromDate, i);
+      SLOTS.forEach((slot) => ids.push({ external_id: `${ID_PREFIX}-${date}-${slot}` }));
+    }
+    const size = batchSize || 1000;
+    const batches = [];
+    for (let i = 0; i < ids.length; i += size) batches.push(ids.slice(i, i + size));
+    return batches;
+  }
+
   /** startDate: ISO date (YYYY-MM-DD) of week 1's Monday. */
   function buildEvents(plan, startDate) {
     const start = mondayOf(startDate);
@@ -138,7 +159,7 @@
     return plan.weeks.flatMap((w, wi) => w.days.flatMap((d, di) => dayEvents(d, addDays(start, wi * 7 + di), t, plan)));
   }
 
-  const api = { ENDPOINT, buildEvents, mondayOf, addDays, dur };
+  const api = { ENDPOINT, DELETE_ENDPOINT, SLOTS, buildEvents, clearBatches, mondayOf, addDays, dur };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.NilsIntervals = api;

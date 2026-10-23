@@ -152,9 +152,12 @@
         </div>
       </div>
       <p class="hint" id="export-dates"></p>
-      <button type="button" class="primary-btn" id="send">Send to intervals.icu</button>
+      <div class="export-actions">
+        <button type="button" class="primary-btn" id="send">Send to intervals.icu</button>
+        <button type="button" class="link-btn" id="remove">Remove from intervals.icu</button>
+      </div>
       <p class="export-status" id="export-status" role="status" aria-live="polite"></p>
-      <p class="hint">Your key goes straight from this page to intervals.icu and isn’t saved. intervals.icu uploads the coming week to Garmin Connect, so sync your watch to get it. Sending again with the same start date updates the workouts instead of duplicating them. If you change the plan’s length or start date, delete the old ones in intervals.icu.</p>
+      <p class="hint">Your key goes straight from this page to intervals.icu and isn’t saved. intervals.icu uploads the coming week to Garmin Connect, so sync your watch to get it. Sending replaces any Train like Nils sessions from today on, so you can change the race date or the percentage and send again. Past sessions and your other workouts aren’t touched.</p>
     </section>
 
     <section class="card rules" aria-labelledby="rules-title">

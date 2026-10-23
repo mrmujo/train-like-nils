@@ -789,3 +789,6 @@ a.link-btn { display: inline; }
 }
 
 .export-status:empty { display: none; }
+
+.export-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
+.link-btn:disabled { opacity: 0.5; cursor: progress; }
