@@ -82,6 +82,7 @@
     if (!paces) return '';
     const range = (r) => `${P.fmtPace(r[0])}–${P.fmtPace(r[1])} /km`;
     if (zone === 'easy') return range(paces.easy);
+    if (zone === 'warmup') return `steady ${P.fmtPace(paces.steady)} /km`;
     if (zone === 'threshold') return range(paces.threshold);
     if (zone === 'race') return `${P.fmtPace(paces.race)} /km`;
     if (zone === 'speed' && paces.speed) return `${P.fmtPace(paces.speed)} /km`;
@@ -105,13 +106,13 @@
 
     const tiles = pc
       ? [
-        tile('Easy', `${P.fmtPace(pc.easy[0])}–${P.fmtPace(pc.easy[1])}`, '/km', '60–75 % of max heart rate'),
+        tile('Easy', `${P.fmtPace(pc.easy[0])}–${P.fmtPace(pc.easy[1])}`, '/km', `60–75 % of max heart rate. Daily test: steady at ${P.fmtPace(pc.steady)}.`),
         tile('Threshold', `${P.fmtPace(pc.threshold[0])}–${P.fmtPace(pc.threshold[1])}`, '/km', 'Pace you could race for about an hour'),
         tile('Race pace', P.fmtPace(pc.race), '/km', `${race.label} in ${P.fmtClock(plan.goalSec)}`),
         pc.speed ? tile('Speed', P.fmtPace(pc.speed), '/km', '3 % faster, used in overreach weeks') : null,
       ]
       : [
-        tile('Easy', 'Conversational', '', '60–75 % of max heart rate'),
+        tile('Easy', 'Conversational', '', '60–75 % of max heart rate. Daily test: steady at the top of it.'),
         tile('Threshold', 'Comfortably hard', '', 'Pace you could race for about an hour'),
         tile('Race pace', 'Goal effort', '', `Add a goal time to get paces`),
         race.ultra ? null : tile('Speed', 'A notch faster', '', 'Used in overreach weeks'),
@@ -229,8 +230,7 @@
   // --- Week cards --------------------------------------------------------------
   function renderBlock(b) {
     const work = b.zone === 'threshold' || b.zone === 'race' || b.zone === 'speed' || b.zone === 'strength';
-    // The warm-up mixes easy and steady running, so it gets no single pace.
-    const pace = b.label === 'Warm-up' ? '' : plan.paces ? paceText(b.zone, plan.paces) : work ? EFFORT[b.zone] : '';
+    const pace = plan.paces ? paceText(b.zone, plan.paces) : work ? EFFORT[b.zone] : '';
     return el('li', { class: work ? 'work' : null },
       el('span', { class: 'b-min' }, P.fmtMin(b.min)),
       el('span', null,

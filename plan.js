@@ -132,6 +132,7 @@
       race: goalSec / race.km,
       threshold: [t60, t75],                     // "a little under 4 mmol/l"
       easy: [t60 * 1.2, t60 * 1.35],             // A1: 60–75 % of max HR
+      steady: t60 * 1.2,                         // the daily test: his 260 W, the top of easy
       speed: race.ultra ? null : (goalSec / race.km) * 0.97, // his "5k session": 29.0 vs 30.0
     };
   }
@@ -144,7 +145,7 @@
   }
 
   function warmup() {
-    return block(10, 'Warm-up', 'easy', '5 min easy + 5 min steady. Note your heart rate.');
+    return block(10, 'Warm-up', 'warmup', '5 min easy, then 5 min steady at the same pace every day. Note your heart rate.');
   }
 
   function set(reps, len, rest, zone) {
