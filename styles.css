@@ -597,6 +597,26 @@ input[type="range"]::-moz-range-thumb {
 .day.race .day-title { font-weight: 650; }
 
 .note { margin-top: 2px; font-size: 13px; color: var(--muted); }
+.fuel-note.must { color: var(--ink-2); }
+
+.fuel {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  padding: 1px 8px 1px 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--ink);
+  vertical-align: 2px;
+  white-space: nowrap;
+}
+
+.fuel svg { fill: currentColor; flex: none; }
 
 .blocks { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 3px; }
 
@@ -704,4 +724,14 @@ input[type="range"]::-moz-range-thumb {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
+}
+
+.fuel-inline {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
 }

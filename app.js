@@ -240,6 +240,12 @@
         b.detail ? el('span', { class: 'b-detail' }, b.detail) : null));
   }
 
+  function fuelBadge() {
+    const icon = svg('svg', { viewBox: '0 0 16 16', width: 12, height: 12, 'aria-hidden': 'true' });
+    icon.append(svg('path', { d: 'M9.5 1 3 9.5h4.5L6.5 15 13 6.5H8.5z' }));
+    return el('span', { class: 'fuel' }, icon, 'Fuel');
+  }
+
   function renderDay(d) {
     let total = '';
     if (d.goal) total = plan.goalSec ? P.fmtClock(plan.goalSec) : '';
@@ -250,13 +256,15 @@
     const meta = single
       ? [single.label === 'Easy' ? '' : single.label, paceText(single.zone, plan.paces), single.detail].filter(Boolean).join(' · ')
       : '';
-    const hasBody = meta || d.note || (d.blocks.length && !single);
+    const fuel = d.fuel;
+    const hasBody = meta || fuel || d.note || (d.blocks.length && !single);
     return el('li', { class: `day ${d.type}` },
       el('span', { class: 'dow' }, d.dow),
-      el('p', { class: 'day-title' }, title),
+      el('p', { class: 'day-title' }, title, fuel && fuel.badge ? fuelBadge() : null),
       el('span', { class: 'day-total' }, total),
       hasBody ? el('div', { class: 'day-body' },
         meta ? el('p', { class: 'note' }, meta) : null,
+        fuel ? el('p', { class: fuel.badge ? 'note fuel-note must' : 'note fuel-note' }, fuel.text) : null,
         d.note ? el('p', { class: 'note' }, d.note) : null,
         d.blocks.length && !single ? el('ul', { class: 'blocks' }, ...d.blocks.map(renderBlock)) : null) : null);
   }

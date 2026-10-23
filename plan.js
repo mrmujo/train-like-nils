@@ -228,7 +228,7 @@
   // Ultras: race-pace reps make no sense, so rehearse the race instead.
   function rehearsalDay(ctx, minutes, title) {
     const total = Math.max(20, snap(minutes, DURATIONS));
-    const detail = 'Power-hike the climbs. Eat and drink like on race day.';
+    const detail = 'Power-hike the climbs.';
     if (total < 90) return makeDay('rehearsal', title || 'Race rehearsal', [block(total, 'Goal effort', 'race', detail)]);
     const fuel = total >= 150 ? 15 : 10;
     const half = snap((total - fuel) / 2, DURATIONS);
@@ -315,6 +315,41 @@
     } else if (w.sub !== 'Race week') {
       addTo(days[0], prehabBlock());
     }
+  }
+
+  // --- Fuel -----------------------------------------------------------------------
+  // "I made sure to always have some sugars with me whilst training and not run out
+  // of energy during a session." Days you must eat on get a badge; shorter hard
+  // sessions just get a reminder to carry something. Gram targets are general
+  // sports-nutrition guidance, not from the document.
+  const FUEL_LONG = 90;
+
+  function longestSession(day) {
+    let longest = 0;
+    let current = 0;
+    for (const b of day.blocks) {
+      if (b.zone === 'strength') continue;
+      if (b.session === 'PM') { longest = Math.max(longest, current); current = 0; }
+      current += b.min;
+    }
+    return Math.max(longest, current);
+  }
+
+  function fuelFor(day, race) {
+    const ultraGoal = race.km >= 50;
+    if (day.type === 'race') {
+      const km = day.goal ? race.km : race.km >= 42 ? 21 : 10; // tune-ups are a half or longer for marathon+
+      return km >= 21 ? { badge: true, text: 'Eat from the start, every 20–30 min. Don’t wait until you’re hungry.' } : null;
+    }
+    if (day.type === 'rehearsal') return { badge: true, text: 'Practise race food: eat every 20–30 min, 60–90 g carbs an hour.' };
+    const hard = day.type === 'threshold' || day.type === 'specific' || day.type === 'speed';
+    if (longestSession(day) >= FUEL_LONG) {
+      const amount = ultraGoal
+        ? 'build toward race-day amounts (60–90 g carbs an hour)'
+        : 'about 30–60 g carbs an hour';
+      return { badge: true, text: hard ? `Carry sugar for the hard part, then eat every 20–30 min, ${amount}.` : `Eat every 20–30 min, ${amount}.` };
+    }
+    return hard ? { badge: false, text: 'Carry some sugar for the hard part.' } : null;
   }
 
   // --- Weeks ------------------------------------------------------------------
@@ -514,6 +549,7 @@
       );
     }
     if (opts.strength !== false) raw.forEach(addStrength);
+    raw.forEach((w) => w.days.forEach((d) => { d.fuel = fuelFor(d, race); }));
     const counts = { aerobic: 0, threshold: 0, specific: 0, peak: 0 };
     raw.forEach((w) => { counts[w.phase] += 1; });
 
