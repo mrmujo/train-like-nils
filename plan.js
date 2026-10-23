@@ -102,38 +102,63 @@
 
   // --- Goal time and paces ----------------------------------------------------
   // "45:00" is mm:ss for a 10K and h:mm for everything longer.
-  function parseTime(str, raceKey) {
-    const race = RACES[raceKey];
-    if (!race || !str) return null;
+  // A recent result sets training paces. Goal times for ultras include walking,
+  // aid stations and terrain, so they say little about your aerobic speed.
+  const RECENT_RACES = {
+    '5k':       { key: '5k', label: '5K', km: 5, example: '22:00' },
+    '10k':      { key: '10k', label: '10K', km: 10, example: '45:00' },
+    'half':     { key: 'half', label: 'Half', km: 21.0975, example: '1:40:00' },
+    'marathon': { key: 'marathon', label: 'Marathon', km: 42.195, example: '3:30:00' },
+  };
+
+  // "45:00" is mm:ss up to 10 km and h:mm for anything longer.
+  function parseClock(str, km, maxPace) {
+    if (!str) return null;
     const parts = String(str).trim().split(/[:.]/);
     if (parts.some((p) => !/^\d+$/.test(p))) return null;
     const n = parts.map(Number);
     let sec;
     if (n.length === 3) sec = n[0] * 3600 + n[1] * 60 + n[2];
-    else if (n.length === 2) sec = raceKey === '10k' ? n[0] * 60 + n[1] : n[0] * 3600 + n[1] * 60;
+    else if (n.length === 2) sec = km <= 10 ? n[0] * 60 + n[1] : n[0] * 3600 + n[1] * 60;
     else return null;
-    const pace = sec / race.km;
-    if (pace < 150 || pace > 1200) return null; // 2:30–20:00 per km
+    const pace = sec / km;
+    if (pace < 150 || pace > maxPace) return null;
     return sec;
   }
 
-  function computePaces(raceKey, goalSec) {
+  function parseTime(str, raceKey) {
     const race = RACES[raceKey];
-    if (!race || !goalSec) return null;
-    // Riegel: t2 = t1 · (d2/d1)^k. Solve for the distance you could race in t minutes.
-    const k = race.ultra || race.km > 43 ? 1.10 : 1.06;
-    const paceFor = (minutes) => {
-      const d = race.km * Math.pow((minutes * 60) / goalSec, 1 / k);
-      return (minutes * 60) / d;
-    };
-    const t60 = paceFor(60);
-    const t75 = paceFor(75);
+    return race ? parseClock(str, race.km, 1200) : null; // 2:30–20:00 per km
+  }
+
+  function parseRecent(str, key) {
+    const r = RECENT_RACES[key];
+    return r ? parseClock(str, r.km, 720) : null; // 2:30–12:00 per km
+  }
+
+  // Riegel: t2 = t1 · (d2/d1)^k. The pace you could race for `minutes`.
+  function riegelPace(km, sec, minutes, k) {
+    const d = km * Math.pow((minutes * 60) / sec, 1 / k);
+    return (minutes * 60) / d;
+  }
+
+  /** recent: { key, sec } from parseRecent, optional. */
+  function computePaces(raceKey, goalSec, recent) {
+    const race = RACES[raceKey];
+    const rec = recent && RECENT_RACES[recent.key] && recent.sec ? { km: RECENT_RACES[recent.key].km, sec: recent.sec } : null;
+    if (!race || (!goalSec && !rec)) return null;
+    const base = rec || { km: race.km, sec: goalSec };
+    const k = rec ? 1.06 : race.ultra || race.km > 43 ? 1.10 : 1.06;
+    const t60 = riegelPace(base.km, base.sec, 60, k);
+    const t75 = riegelPace(base.km, base.sec, 75, k);
+    const racePace = goalSec ? goalSec / race.km : null;
     return {
-      race: goalSec / race.km,
+      source: rec ? 'recent' : 'goal',
+      race: racePace,
       threshold: [t60, t75],                     // "a little under 4 mmol/l"
       easy: [t60 * 1.2, t60 * 1.35],             // A1: 60–75 % of max HR
       steady: t60 * 1.2,                         // the daily test: his 260 W, the top of easy
-      speed: race.ultra ? null : (goalSec / race.km) * 0.97, // his "5k session": 29.0 vs 30.0
+      speed: racePace && !race.ultra ? racePace * 0.97 : null, // his "5k session": 29.0 vs 30.0
     };
   }
 
@@ -494,7 +519,7 @@
 
   /**
    * opts: { p: 0.1–1, race: key, goalSec?, mode: 'race' | 'cycle' | 'year' | 'season', weeks?, season?,
-   *         strength?, currentHours? }
+   *         strength?, currentHours?, recent?: { key, sec } }
    */
   function buildPlan(opts) {
     const race = RACES[opts.race] || RACES.marathon;
@@ -550,7 +575,7 @@
       p,
       counts,
       weeks,
-      paces: computePaces(race.key, goalSec),
+      paces: computePaces(race.key, goalSec, opts.recent),
       goalSec,
       startP,
     };
@@ -563,8 +588,8 @@
   }
 
   const api = {
-    RACES, PHASES, DOW, DURATIONS, REPS, RESTS, YEAR,
-    buildPlan, baseWeekMin, parseTime, computePaces, allocate, snap,
+    RACES, RECENT_RACES, PHASES, DOW, DURATIONS, REPS, RESTS, YEAR,
+    buildPlan, baseWeekMin, parseTime, parseRecent, computePaces, allocate, snap,
     fmtMin, fmtRep, fmtPace, fmtClock,
   };
 

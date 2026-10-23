@@ -277,6 +277,9 @@ input[type="range"]::-moz-range-thumb {
 
 .text-input::placeholder { color: var(--axis-ink); }
 
+.field-stack { display: grid; gap: 28px; align-content: start; }
+.recent-time { margin-top: 10px; }
+
 .unit-input {
   display: flex;
   align-items: center;

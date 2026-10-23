@@ -6,7 +6,8 @@
   const $ = (sel) => document.querySelector(sel);
   const SVG = 'http://www.w3.org/2000/svg';
 
-  const state = { p: 30, race: 'marathon', time: '', mode: 'race', weeks: 16, season: 'aerobic', strength: true, now: '' };
+  const state = { p: 30, race: 'marathon', time: '', mode: 'race', weeks: 16, season: 'aerobic', strength: true, now: '',
+    recentKey: '10k', recentTime: '' };
   const openWeeks = new Set([1]);
   let plan = null;
 
@@ -49,6 +50,8 @@
     if (['aerobic', 'threshold', 'specific'].includes(q.get('season'))) state.season = q.get('season');
     if (q.get('strength') === '0') state.strength = false;
     if (q.has('now')) state.now = q.get('now').slice(0, 5);
+    if (P.RECENT_RACES[q.get('rk')]) state.recentKey = q.get('rk');
+    if (q.has('rt')) state.recentTime = q.get('rt').slice(0, 12);
   }
 
   function writeHash() {
@@ -58,6 +61,7 @@
     if (state.mode === 'season') q.set('season', state.season);
     if (!state.strength) q.set('strength', '0');
     if (state.now) q.set('now', state.now);
+    if (state.recentTime) { q.set('rk', state.recentKey); q.set('rt', state.recentTime); }
     history.replaceState(null, '', '#' + q.toString().replace(/%3A/g, ':'));
   }
 
@@ -70,6 +74,8 @@
     $('#weeks').value = state.weeks;
     $('#strength').checked = state.strength;
     $('#now').value = state.now;
+    document.querySelector(`input[name="recent"][value="${state.recentKey}"]`).checked = true;
+    $('#recent-time').value = state.recentTime;
   }
 
   function currentHours() {
@@ -84,7 +90,7 @@
     if (zone === 'easy') return range(paces.easy);
     if (zone === 'warmup') return `steady ${P.fmtPace(paces.steady)} /km`;
     if (zone === 'threshold') return range(paces.threshold);
-    if (zone === 'race') return `${P.fmtPace(paces.race)} /km`;
+    if (zone === 'race' && paces.race) return `${P.fmtPace(paces.race)} /km`;
     if (zone === 'speed' && paces.speed) return `${P.fmtPace(paces.speed)} /km`;
     return '';
   }
@@ -104,19 +110,23 @@
       el('div', { class: unit ? 'pace-value num' : 'pace-value' }, value, unit ? el('small', null, unit) : null),
       el('div', { class: 'pace-sub' }, sub));
 
-    const tiles = pc
-      ? [
-        tile('Easy', `${P.fmtPace(pc.easy[0])}–${P.fmtPace(pc.easy[1])}`, '/km', `60–75 % of max heart rate. Daily test: steady at ${P.fmtPace(pc.steady)}.`),
-        tile('Threshold', `${P.fmtPace(pc.threshold[0])}–${P.fmtPace(pc.threshold[1])}`, '/km', 'Pace you could race for about an hour'),
-        tile('Race pace', P.fmtPace(pc.race), '/km', `${race.label} in ${P.fmtClock(plan.goalSec)}`),
-        pc.speed ? tile('Speed', P.fmtPace(pc.speed), '/km', '3 % faster, used in overreach weeks') : null,
-      ]
-      : [
-        tile('Easy', 'Conversational', '', '60–75 % of max heart rate. Daily test: steady at the top of it.'),
-        tile('Threshold', 'Comfortably hard', '', 'Pace you could race for about an hour'),
-        tile('Race pace', 'Goal effort', '', `Add a goal time to get paces`),
-        race.ultra ? null : tile('Speed', 'A notch faster', '', 'Used in overreach weeks'),
-      ];
+    // Training paces and race pace can come from different inputs, so each tile
+    // falls back to effort on its own.
+    const tiles = [
+      pc
+        ? tile('Easy', `${P.fmtPace(pc.easy[0])}–${P.fmtPace(pc.easy[1])}`, '/km', `60–75 % of max heart rate. Daily test: steady at ${P.fmtPace(pc.steady)}.`)
+        : tile('Easy', 'Conversational', '', '60–75 % of max heart rate. Daily test: steady at the top of it.'),
+      pc
+        ? tile('Threshold', `${P.fmtPace(pc.threshold[0])}–${P.fmtPace(pc.threshold[1])}`, '/km', 'Pace you could race for about an hour')
+        : tile('Threshold', 'Comfortably hard', '', 'Pace you could race for about an hour'),
+      pc && pc.race
+        ? tile('Race pace', P.fmtPace(pc.race), '/km', `${race.label} in ${P.fmtClock(plan.goalSec)}`)
+        : tile('Race pace', 'Goal effort', '', 'Add a goal time to get race pace'),
+      race.ultra ? null
+        : pc && pc.speed
+          ? tile('Speed', P.fmtPace(pc.speed), '/km', '3 % faster, used in overreach weeks')
+          : tile('Speed', 'A notch faster', '', 'Used in overreach weeks'),
+    ];
     host.replaceChildren(...tiles.filter(Boolean));
   }
 
@@ -230,7 +240,7 @@
   // --- Week cards --------------------------------------------------------------
   function renderBlock(b) {
     const work = b.zone === 'threshold' || b.zone === 'race' || b.zone === 'speed' || b.zone === 'strength';
-    const pace = plan.paces ? paceText(b.zone, plan.paces) : work ? EFFORT[b.zone] : '';
+    const pace = paceText(b.zone, plan.paces) || (work && EFFORT[b.zone]) || '';
     return el('li', { class: work ? 'work' : null },
       el('span', { class: 'b-min' }, P.fmtMin(b.min)),
       el('span', null,
@@ -250,7 +260,7 @@
     let total = '';
     if (d.goal) total = plan.goalSec ? P.fmtClock(plan.goalSec) : '';
     else if (d.totalMin) total = fmtTotal(d.totalMin);
-    const title = d.goal && plan.paces ? `${d.title} at ${P.fmtPace(plan.paces.race)} /km` : d.title;
+    const title = d.goal && plan.paces && plan.paces.race ? `${d.title} at ${P.fmtPace(plan.paces.race)} /km` : d.title;
     // A one-block day (an easy run) needs no block list: put its pace under the title.
     const single = d.blocks.length === 1 && !d.blocks[0].session ? d.blocks[0] : null;
     const meta = single
@@ -326,7 +336,25 @@
       time.removeAttribute('aria-invalid');
       hint.textContent = goalSec
         ? `${P.fmtClock(goalSec)} = ${P.fmtPace(goalSec / race.km)} /km`
-        : 'Gives you paces. Without it, sessions are described by effort.';
+        : 'Sets your race pace. Without any times, sessions are described by effort.';
+    }
+
+    const recent = P.RECENT_RACES[state.recentKey];
+    const rTime = $('#recent-time');
+    rTime.placeholder = recent.example;
+    const rHint = $('#recent-hint');
+    const recentSec = P.parseRecent(state.recentTime, state.recentKey);
+    rHint.classList.toggle('error', Boolean(state.recentTime && !recentSec));
+    if (state.recentTime && !recentSec) {
+      rHint.textContent = `Couldn’t read that. Use h:mm:ss, for example ${recent.example}.`;
+      rTime.setAttribute('aria-invalid', 'true');
+    } else {
+      rTime.removeAttribute('aria-invalid');
+      rHint.textContent = recentSec
+        ? `${recent.label} in ${P.fmtClock(recentSec)} sets your easy, threshold and steady paces.`
+        : race.km >= 50
+          ? 'Add one for realistic training paces. A goal time this long says little about your easy and threshold pace.'
+          : 'Sets your easy and threshold paces. Without it, they are estimated from your goal time.';
     }
 
     $('#extra-race').hidden = state.mode !== 'race';
@@ -338,15 +366,16 @@
       : state.mode === 'year'
         ? `52 weeks like his: ${Y.aerobic} Aerobic → ${Y.threshold} Threshold → ${Y.blocks} Specific blocks with tune-up races and Aerobic 2.0 resets → ${Y.peak} Overreach & taper`
         : P.PHASES[state.season].blurb;
-    return goalSec;
+    return { goalSec, recent: recentSec ? { key: state.recentKey, sec: recentSec } : null };
   }
 
   function render() {
-    const goalSec = renderControls();
+    const { goalSec, recent } = renderControls();
     plan = P.buildPlan({
       p: state.p / 100,
       race: state.race,
       goalSec,
+      recent,
       mode: state.mode,
       weeks: state.weeks,
       season: state.season,
@@ -396,6 +425,13 @@
       render();
     });
     $('#time').addEventListener('input', (e) => { state.time = e.target.value.trim(); render(); });
+    $('#recent').addEventListener('change', (e) => {
+      state.recentKey = e.target.value;
+      state.recentTime = ''; // a 10K time makes no sense for a marathon
+      $('#recent-time').value = '';
+      render();
+    });
+    $('#recent-time').addEventListener('input', (e) => { state.recentTime = e.target.value.trim(); render(); });
     $('#mode').addEventListener('change', (e) => { state.mode = e.target.value; render(); });
     $('#season').addEventListener('change', (e) => { state.season = e.target.value; render(); });
     $('#strength').addEventListener('change', (e) => { state.strength = e.target.checked; render(); });

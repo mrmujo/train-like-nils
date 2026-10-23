@@ -49,10 +49,24 @@
       </fieldset>
 
       <div class="field-row">
-        <div class="field">
-          <label for="time">Goal time <span class="opt">optional</span></label>
-          <input id="time" class="text-input" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="3:30:00" aria-describedby="time-hint">
-          <p class="hint" id="time-hint">Gives you paces. Without it, sessions are described by effort.</p>
+        <div class="field-stack">
+          <div class="field">
+            <label for="time">Goal time <span class="opt">optional</span></label>
+            <input id="time" class="text-input" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="3:30:00" aria-describedby="time-hint">
+            <p class="hint" id="time-hint"></p>
+          </div>
+
+          <fieldset class="field">
+            <legend>Recent race <span class="opt">optional</span></legend>
+            <div class="chips chips-sm" id="recent">
+              <label><input type="radio" name="recent" value="5k"><span>5K</span></label>
+              <label><input type="radio" name="recent" value="10k"><span>10K</span></label>
+              <label><input type="radio" name="recent" value="half"><span>Half</span></label>
+              <label><input type="radio" name="recent" value="marathon"><span>Marathon</span></label>
+            </div>
+            <input id="recent-time" class="text-input recent-time" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="45:00" aria-label="Recent race time" aria-describedby="recent-hint">
+            <p class="hint" id="recent-hint"></p>
+          </fieldset>
         </div>
 
         <fieldset class="field">
