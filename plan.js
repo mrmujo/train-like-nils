@@ -26,6 +26,12 @@
   const YEAR = { aerobic: 20, threshold: 10, blocks: 3, blockWeeks: 5, reset: 2, peak: 3 };
   const YEAR_RAMP = [0.7, 0.8, 0.9]; // "It took a few months to get there."
   const RAMP_RATE = 1.1;              // from your current volume: +10 % a week
+  // At full Nils every day is a 5–7 h day. Scaled down evenly that long-duration
+  // stimulus disappears, so for 50K+ one day a week carries a third of the running.
+  const LONG_SHARE = 1 / 3;
+  const LONG_CAP = { '50k': 210, '100k': 300, '100mi': 360 };
+  // His Aerobic-season endurance challenges (100 km run, stage race): one optional big day.
+  const CHALLENGE = { factor: 1.5, cap: { '50k': 300, '100k': 420, '100mi': 480 } };
   const MIN_P = 0.04;
 
   const RACES = {
@@ -178,16 +184,18 @@
     return Object.assign(b, { reps, len, rest });
   }
 
-  function makeDay(type, title, blocks, note) {
+  function makeDay(type, title, blocks, note, long) {
     const totalMin = blocks.reduce((sum, b) => sum + b.min, 0);
-    if (totalMin > 180 && blocks.length > 1) {
+    if (!long && totalMin > 180 && blocks.length > 1) {
       const last = blocks[blocks.length - 1];
       if (last.zone === 'easy' && last.min >= 45) {
         blocks[0].session = 'AM';
         last.session = 'PM';
       }
     }
-    return { type, title, blocks, totalMin, note: note || '' };
+    const day = { type, title, blocks, totalMin, note: note || '' };
+    if (long) day.long = true; // one continuous run, never split into AM + PM
+    return day;
   }
 
   function restDay(note) {
@@ -203,12 +211,17 @@
       [block(am, 'Easy', 'easy', '', 'AM'), block(pm, 'Easy', 'easy', '', 'PM')]);
   }
 
+  function longRunDay(min, title, note) {
+    const total = Math.max(20, snap(min, DURATIONS));
+    return makeDay('long', title || 'Long run', [block(total, 'Long run', 'easy', 'Easy pace the whole way.')], note, true);
+  }
+
   // Fill the rest of the day with easy running, or at least a 10 min cool-down.
-  function withEasy(type, title, blocks, target, detail, note) {
+  function withEasy(type, title, blocks, target, detail, note, long) {
     const used = blocks.reduce((sum, b) => sum + b.min, 0);
     const easy = snap(Math.max(target - used, 10), DURATIONS);
-    blocks.push(block(easy, easy === 10 ? 'Cool-down' : 'Easy', 'easy', easy === 10 ? '' : detail));
-    return makeDay(type, title, blocks, note);
+    blocks.push(block(easy, easy === 10 ? 'Cool-down' : long ? 'Long easy finish' : 'Easy', 'easy', easy === 10 ? '' : detail));
+    return makeDay(type, title, blocks, note, long);
   }
 
   // Keep Nils's shape: reps and rep length both shrink with √s.
@@ -220,10 +233,10 @@
     return { reps, len, rest };
   }
 
-  function thresholdDay(ctx, target, template, f, title) {
+  function thresholdDay(ctx, target, template, f, title, long) {
     const sc = scaleSet(template, ctx.s, f);
-    return withEasy('threshold', title || `Threshold ${sc.reps} × ${fmtRep(sc.len)}`,
-      [warmup(), set(sc.reps, sc.len, sc.rest, 'threshold')], target);
+    return withEasy('threshold', title || `Threshold ${sc.reps} × ${fmtRep(sc.len)}${long ? ' + long run' : ''}`,
+      [warmup(), set(sc.reps, sc.len, sc.rest, 'threshold')], target, '', '', long);
   }
 
   function setBreak(ctx, minutes, detail) {
@@ -253,24 +266,36 @@
   }
 
   // Ultras: race-pace reps make no sense, so rehearse the race instead.
-  function rehearsalDay(ctx, minutes, title) {
+  function rehearsalDay(ctx, minutes, title, long) {
     const total = Math.max(20, snap(minutes, DURATIONS));
     const detail = 'Power-hike the climbs.';
-    if (total < 90) return makeDay('rehearsal', title || 'Race rehearsal', [block(total, 'Goal effort', 'race', detail)]);
+    const name = title || (long ? 'Long race rehearsal' : 'Race rehearsal');
+    if (total < 90) return makeDay('rehearsal', name, [block(total, 'Goal effort', 'race', detail)], '', long);
     const fuel = total >= 150 ? 15 : 10;
     const half = snap((total - fuel) / 2, DURATIONS);
-    return makeDay('rehearsal', title || 'Race rehearsal', [
+    return makeDay('rehearsal', name, [
       block(half, 'Goal effort', 'race', detail),
       block(fuel, 'Fuel stop', 'walk', 'Walk and eat a real snack.'),
       block(half, 'Goal effort', 'race', ''),
-    ]);
+    ], '', long);
+  }
+
+  // Planned minutes of a race-specific day: the session plus easy running after it,
+  // or for 100K+ the length of the race rehearsal.
+  function specificMinutes(ctx, d, sets, easyAfter) {
+    if (ctx.race.ultra) return ULTRA_DAY[d] * ctx.p * (sets === 1 ? 0.75 : 1);
+    return raceSession(ctx, sets).blocks.reduce((sum, b) => sum + b.min, 0) + easyAfter;
+  }
+
+  function specificDayOf(ctx, sets, minutes, title, long) {
+    if (ctx.race.ultra) return rehearsalDay(ctx, minutes, title, long);
+    const sess = raceSession(ctx, sets);
+    return withEasy('specific', title || (long ? `${sess.title} + long run` : sess.title), sess.blocks, minutes,
+      'After the fast part, never before.', '', long);
   }
 
   function specificDay(ctx, d, sets, easyAfter, title) {
-    if (ctx.race.ultra) return rehearsalDay(ctx, ULTRA_DAY[d] * ctx.p * (sets === 1 ? 0.75 : 1), title);
-    const sess = raceSession(ctx, sets);
-    return withEasy('specific', title || sess.title, sess.blocks, sess.blocks.reduce((s, b) => s + b.min, 0) + easyAfter,
-      'After the fast part, never before.');
+    return specificDayOf(ctx, sets, specificMinutes(ctx, d, sets, easyAfter), title);
   }
 
   function speedDay(ctx, easyAfter) {
@@ -328,19 +353,22 @@
     if (suffix) day.title += ` + ${suffix}`;
   }
 
-  function addStrength(w) {
+  // level: 'base' (the essential squats + prehab) or 'full' (adds heavy lifting).
+  function addStrength(w, level) {
     const days = w.days;
+    const ctx = { longDay: w.longDay === undefined ? null : w.longDay };
     if (w.phase === 'aerobic' && !/^Aerobic 2\.0/.test(w.sub)) {
       // "Of course, I eased into this program also, doing shorter sets in the beginning."
       const easeIn = w.sub === 'Ease in';
       const p = easeIn ? w.p / 2 : w.p;
-      addTo(days[1], squatBlock(p), 'squats');
-      if (!easeIn) addTo(days[2], weightsBlock(w.p), 'weights');
-      addTo(days[3], squatBlock(p), 'squats');
+      const [sq1, wt, sq2] = freeDays(ctx, [1, 2, 3], 3);
+      addTo(days[sq1], squatBlock(p), 'squats');
+      if (!easeIn && level === 'full') addTo(days[wt], weightsBlock(w.p), 'weights');
+      addTo(days[sq2], squatBlock(p), 'squats');
     } else if (w.phase === 'aerobic' || w.phase === 'threshold') {
-      addTo(days[2], squatBlock(w.p), 'squats');
+      addTo(days[freeDays(ctx, [2], 1)[0]], squatBlock(w.p), 'squats');
     } else if (w.sub !== 'Race week') {
-      addTo(days[0], prehabBlock());
+      addTo(days[freeDays(ctx, [0], 1)[0]], prehabBlock());
     }
   }
 
@@ -355,8 +383,11 @@
     }
     if (day.type === 'rehearsal') return { badge: true, text: 'Eat what you’ll eat on race day. You get good at what you train.' };
     if (day.type === 'threshold' || day.type === 'specific' || day.type === 'speed') {
-      return { badge: true, text: 'Carry some sugar. Running out costs you the session and extra recovery.' };
+      return { badge: true, text: day.long
+        ? 'Carry sugar for the hard part, then practise eating on the long finish.'
+        : 'Carry some sugar. Running out costs you the session and extra recovery.' };
     }
+    if (day.long) return { badge: true, text: 'Practise eating on the run. You get good at what you train.' };
     if (day.blocks.some((b) => b.session === 'PM')) return { badge: false, text: 'Have a proper lunch between the sessions.' };
     return null;
   }
@@ -364,31 +395,60 @@
   // --- Weeks ------------------------------------------------------------------
   const RESTS_WEEKEND = () => [restDay(), restDay()];
 
-  function aerobicWeek(ctx, f, habituation) {
+  // Move a third of the week's minutes onto the long day; the other days share the rest.
+  function longSplit(ctx, mins) {
+    if (ctx.longDay === null) return { mins, long: null };
+    const total = mins.reduce((a, b) => a + b, 0);
+    const longMin = Math.min(LONG_CAP[ctx.race.key] || 360, total * LONG_SHARE);
+    if (longMin <= mins[ctx.longDay]) return { mins, long: null };
+    const others = (total - longMin) / (mins.length - 1);
+    return { mins: mins.map((m, d) => (d === ctx.longDay ? longMin : others)), long: ctx.longDay };
+  }
+
+  // Days for extra sessions (habituation sets, strength), kept off the long day.
+  function freeDays(ctx, wanted, count) {
+    return wanted.concat([4, 0, 2, 1, 3]).filter((d, i, all) => d !== ctx.longDay && all.indexOf(d) === i).slice(0, count);
+  }
+
+  function aerobicWeek(ctx, f, habituation, challenge) {
     const week = RUN_WEEK_100 * ctx.p * f;
-    const days = AEROBIC_SPLIT.map((w, i) => {
-      const min = (week * w) / AEROBIC_TOTAL;
-      if (habituation && (i === 1 || i === 3)) return thresholdDay(ctx, min, HABITUATION, 1, 'Easy + a first threshold set');
+    const split = longSplit(ctx, AEROBIC_SPLIT.map((w) => (week * w) / AEROBIC_TOTAL));
+    const hab = habituation ? freeDays(ctx, [1, 3], 2) : [];
+    const days = split.mins.map((min, i) => {
+      if (i === split.long) {
+        if (!challenge) return longRunDay(min);
+        const big = Math.min(CHALLENGE.cap[ctx.race.key] || 480, min * CHALLENGE.factor);
+        return longRunDay(big, 'Nils challenge (optional)',
+          'A big day, like his 100 km runs. Swap it for a normal long run if you’d rather, and take the next days easy if it beat you up.');
+      }
+      if (hab.includes(i)) return thresholdDay(ctx, min, HABITUATION, 1, 'Easy + a first threshold set');
       return easyDay(min);
     });
     return days.concat(RESTS_WEEKEND());
   }
 
   function thresholdWeek(ctx, i, n, nextIsSpecific) {
-    const target = THRESHOLD_DAY_BIKE * BIKE_TO_RUN * ctx.p;
+    const split = longSplit(ctx, [0, 1, 2, 3, 4].map(() => THRESHOLD_DAY_BIKE * BIKE_TO_RUN * ctx.p));
     let days;
     if (i === 0) {
-      days = [0, 1, 2, 3, 4].map((d) => (d % 2 === 0 ? thresholdDay(ctx, target, HABITUATION, 1) : easyDay(target)));
+      days = split.mins.map((m, d) => {
+        if (d % 2 === 0) return thresholdDay(ctx, m, HABITUATION, 1, undefined, d === split.long);
+        return d === split.long ? longRunDay(m) : easyDay(m);
+      });
     } else {
       const f = i === 1 ? 0.9 : 1;
-      days = THRESHOLD_WEEK.map((t) => thresholdDay(ctx, target, t, f));
+      days = THRESHOLD_WEEK.map((t, d) => thresholdDay(ctx, split.mins[d], t, f, undefined, d === split.long));
     }
-    if (nextIsSpecific && i === n - 1) days[4] = specificDay(ctx, 4, 1, SPECIFIC_EASY_AFTER[4] * ctx.p, 'First race-pace session');
+    if (nextIsSpecific && i === n - 1) {
+      const d = split.long === 4 ? 3 : 4; // never give up the long run for it
+      days[d] = specificDay(ctx, d, 1, SPECIFIC_EASY_AFTER[d] * ctx.p, 'First race-pace session');
+    }
     return days.concat(RESTS_WEEKEND());
   }
 
   function specificWeek(ctx, sets) {
-    const days = [0, 1, 2, 3, 4].map((d) => specificDay(ctx, d, sets, SPECIFIC_EASY_AFTER[d] * ctx.p));
+    const split = longSplit(ctx, [0, 1, 2, 3, 4].map((d) => specificMinutes(ctx, d, sets, SPECIFIC_EASY_AFTER[d] * ctx.p)));
+    const days = split.mins.map((m, d) => specificDayOf(ctx, sets, m, undefined, d === split.long));
     return days.concat(RESTS_WEEKEND());
   }
 
@@ -401,9 +461,13 @@
 
   // Example Aerobic 2.0 week: four long easy days, one race-pace session on Friday.
   function aerobic2Week(ctx) {
-    const day = (RUN_WEEK_100 * ctx.p * 6) / AEROBIC_TOTAL;
-    return [0, 1, 2, 3].map(() => easyDay(day))
-      .concat([specificDay(ctx, 4, 2, SPECIFIC_EASY_AFTER[4] * ctx.p)], RESTS_WEEKEND());
+    const easy = (RUN_WEEK_100 * ctx.p * 6) / AEROBIC_TOTAL;
+    const split = longSplit(ctx, [easy, easy, easy, easy, specificMinutes(ctx, 4, 2, SPECIFIC_EASY_AFTER[4] * ctx.p)]);
+    const days = split.mins.map((m, d) => {
+      if (d === 4) return specificDayOf(ctx, 2, m, undefined, d === split.long);
+      return d === split.long ? longRunDay(m) : easyDay(m);
+    });
+    return days.concat(RESTS_WEEKEND());
   }
 
   // His 12-day overreach: six days on (Mon–Thu 10k session, Fri–Sat 5k session), Sunday off ...
@@ -456,8 +520,11 @@
       const c = ctx.week();
       const f = c.ramped ? 1 : (ramp || AEROBIC_RAMP)[i] || 1;
       const habituation = nextIsThreshold && i === n - 1;
-      const sub = habituation ? 'First threshold sets' : i === 0 ? 'Ease in' : f < 1 || c.building ? 'Building' : '';
-      out.push({ phase: 'aerobic', sub, p: c.p, days: aerobicWeek(c, f, habituation) });
+      const days = aerobicWeek(c, f, habituation, c.longDay !== null && n >= 5 && i === Math.floor(n / 2) && !habituation);
+      const challenge = days.some((d) => d.title === 'Nils challenge (optional)');
+      const sub = habituation ? 'First threshold sets' : challenge ? 'Optional Nils challenge'
+        : i === 0 ? 'Ease in' : f < 1 || c.building ? 'Building' : '';
+      out.push({ phase: 'aerobic', sub, p: c.p, longDay: c.longDay, days });
     }
     return out;
   }
@@ -468,7 +535,7 @@
       const c = ctx.week();
       let sub = i === 0 ? 'Ease in: three sets this week' : i === 1 ? 'Building' : '';
       if (nextIsSpecific && i === n - 1) sub = sub ? `${sub}, first race-pace session` : 'First race-pace session';
-      out.push({ phase: 'threshold', sub, p: c.p, days: thresholdWeek(c, i, n, nextIsSpecific) });
+      out.push({ phase: 'threshold', sub, p: c.p, longDay: c.longDay, days: thresholdWeek(c, i, n, nextIsSpecific) });
     }
     return out;
   }
@@ -482,7 +549,7 @@
         out.push({ phase: 'specific', sub: `Tune-up race: ${c.race.tuneUp}`, p: c.p, days: tuneUpWeek(c) });
       } else {
         const easeIn = o.easeIn && i === 0;
-        out.push({ phase: 'specific', sub: easeIn ? 'Ease in: one set a day' : '', p: c.p, days: specificWeek(c, easeIn ? 1 : 2) });
+        out.push({ phase: 'specific', sub: easeIn ? 'Ease in: one set a day' : '', p: c.p, longDay: c.longDay, days: specificWeek(c, easeIn ? 1 : 2) });
       }
     }
     return out;
@@ -492,7 +559,7 @@
     const out = [];
     for (let i = 0; i < n; i++) {
       const c = ctx.week();
-      out.push({ phase: 'aerobic', sub: i === 0 ? 'Aerobic 2.0: reset after racing' : 'Aerobic 2.0', p: c.p, days: aerobic2Week(c) });
+      out.push({ phase: 'aerobic', sub: i === 0 ? 'Aerobic 2.0: reset after racing' : 'Aerobic 2.0', p: c.p, longDay: c.longDay, days: aerobic2Week(c) });
     }
     return out;
   }
@@ -520,7 +587,7 @@
 
   /**
    * opts: { p: 0.1–1, race: key, goalSec?, mode: 'race' | 'cycle' | 'year' | 'season', weeks?, season?,
-   *         strength?, currentHours?, recent?: { key, sec } }
+   *         strength?: 'none' | 'base' | 'full', currentHours?, recent?: { key, sec }, longDay?: 0–4 (50K+ only) }
    */
   function buildPlan(opts) {
     const race = RACES[opts.race] || RACES.marathon;
@@ -529,13 +596,14 @@
     // "Ease into it and increase the training load carefully and wisely, but also rapidly."
     // With a current volume, week 1 starts there and climbs 10 % a week to the target.
     const startP = opts.currentHours > 0 ? Math.max(MIN_P, (opts.currentHours * 60) / RUN_WEEK_100) : null;
+    const longDay = race.km >= 50 ? Math.min(4, Math.max(0, Math.round(opts.longDay === undefined ? 3 : opts.longDay))) : null;
     let weekNo = 0;
     const ctx = {
       race,
       week() {
         const wp = startP ? Math.min(p, startP * Math.pow(RAMP_RATE, weekNo)) : p;
         weekNo += 1;
-        return { p: wp, s: wp * BIKE_TO_RUN, race, goalSec, ramped: startP !== null, building: wp < p };
+        return { p: wp, s: wp * BIKE_TO_RUN, race, goalSec, longDay, ramped: startP !== null, building: wp < p };
       },
     };
 
@@ -557,7 +625,8 @@
         peakPhase(ctx),
       );
     }
-    if (opts.strength !== false) raw.forEach(addStrength);
+    const strength = opts.strength === false || opts.strength === 'none' ? 'none' : opts.strength === 'base' ? 'base' : 'full';
+    if (strength !== 'none') raw.forEach((w) => addStrength(w, strength));
     raw.forEach((w) => w.days.forEach((d) => { d.fuel = fuelFor(d, race); }));
     const counts = { aerobic: 0, threshold: 0, specific: 0, peak: 0 };
     raw.forEach((w) => { counts[w.phase] += 1; });
@@ -584,7 +653,7 @@
 
   // A full-load aerobic week, used for the slider readout.
   function baseWeekMin(p) {
-    const ctx = { p, s: p * BIKE_TO_RUN, race: RACES.marathon };
+    const ctx = { p, s: p * BIKE_TO_RUN, race: RACES.marathon, longDay: null };
     return aerobicWeek(ctx, 1, false).reduce((sum, d) => sum + d.totalMin, 0);
   }
 

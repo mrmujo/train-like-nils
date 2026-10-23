@@ -48,6 +48,18 @@
         </div>
       </fieldset>
 
+      <fieldset class="field" id="longday-field" hidden>
+        <legend>Long run day</legend>
+        <div class="chips chips-sm" id="longday">
+          <label><input type="radio" name="longday" value="0"><span>Mon</span></label>
+          <label><input type="radio" name="longday" value="1"><span>Tue</span></label>
+          <label><input type="radio" name="longday" value="2"><span>Wed</span></label>
+          <label><input type="radio" name="longday" value="3"><span>Thu</span></label>
+          <label><input type="radio" name="longday" value="4"><span>Fri</span></label>
+        </div>
+        <p class="hint">For 50K and longer, one weekday carries about a third of the week’s running. Nils’s long days were Monday and Thursday. Weekends stay off.</p>
+      </fieldset>
+
       <div class="field-row">
         <div class="field-stack">
           <div class="field">
@@ -100,14 +112,15 @@
         </fieldset>
       </div>
 
-      <div class="field switch-field">
-        <label class="switch">
-          <input type="checkbox" id="strength" checked>
-          <span class="switch-track" aria-hidden="true"></span>
-          <span class="switch-label">Strength work</span>
-        </label>
-        <p class="hint">Like his 2019–20 build-up: one-legged squats and heavy lifts in the Aerobic phase, one squat session a week in Threshold, then just 5 min of core and stretching once racing starts.</p>
-      </div>
+      <fieldset class="field">
+        <legend>Strength work</legend>
+        <div class="chips chips-sm" id="strength">
+          <label><input type="radio" name="strength" value="none"><span>None</span></label>
+          <label><input type="radio" name="strength" value="base"><span>Base: squats</span></label>
+          <label><input type="radio" name="strength" value="full"><span>Full Nils</span></label>
+        </div>
+        <p class="hint" id="strength-hint"></p>
+      </fieldset>
     </section>
 
     <section class="paces" id="paces" aria-label="Your paces"></section>

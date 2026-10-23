@@ -6,7 +6,7 @@
   const $ = (sel) => document.querySelector(sel);
   const SVG = 'http://www.w3.org/2000/svg';
 
-  const state = { p: 30, race: 'marathon', time: '', mode: 'race', weeks: 16, season: 'aerobic', strength: true, now: '',
+  const state = { p: 30, race: 'marathon', time: '', mode: 'race', weeks: 16, season: 'aerobic', strength: 'full', now: '', longDay: 3,
     recentKey: '10k', recentTime: '' };
   const openWeeks = new Set([1]);
   let plan = null;
@@ -48,7 +48,10 @@
     const w = Number(q.get('weeks'));
     if (w >= 8 && w <= 30) state.weeks = Math.round(w);
     if (['aerobic', 'threshold', 'specific'].includes(q.get('season'))) state.season = q.get('season');
-    if (q.get('strength') === '0') state.strength = false;
+    if (q.get('strength') === '0') state.strength = 'none'; // links from before the chooser
+    if (['none', 'base', 'full'].includes(q.get('st'))) state.strength = q.get('st');
+    const ld = Number(q.get('ld'));
+    if (q.has('ld') && ld >= 0 && ld <= 4) state.longDay = Math.round(ld);
     if (q.has('now')) state.now = q.get('now').slice(0, 5);
     if (P.RECENT_RACES[q.get('rk')]) state.recentKey = q.get('rk');
     if (q.has('rt')) state.recentTime = q.get('rt').slice(0, 12);
@@ -59,7 +62,8 @@
     if (state.time) q.set('time', state.time);
     if (state.mode === 'race') q.set('weeks', state.weeks);
     if (state.mode === 'season') q.set('season', state.season);
-    if (!state.strength) q.set('strength', '0');
+    if (state.strength !== 'full') q.set('st', state.strength);
+    if (P.RACES[state.race].km >= 50 && state.longDay !== 3) q.set('ld', state.longDay);
     if (state.now) q.set('now', state.now);
     if (state.recentTime) { q.set('rk', state.recentKey); q.set('rt', state.recentTime); }
     history.replaceState(null, '', '#' + q.toString().replace(/%3A/g, ':'));
@@ -72,7 +76,8 @@
     document.querySelector(`input[name="season"][value="${state.season}"]`).checked = true;
     $('#time').value = state.time;
     $('#weeks').value = state.weeks;
-    $('#strength').checked = state.strength;
+    document.querySelector(`input[name="strength"][value="${state.strength}"]`).checked = true;
+    document.querySelector(`input[name="longday"][value="${state.longDay}"]`).checked = true;
     $('#now').value = state.now;
     document.querySelector(`input[name="recent"][value="${state.recentKey}"]`).checked = true;
     $('#recent-time').value = state.recentTime;
@@ -314,6 +319,12 @@
     $('#toggle-all').textContent = allOpen() ? 'Collapse all' : 'Expand all';
   }
 
+  const STRENGTH_HINT = {
+    none: 'His final years: no strength work at all.',
+    base: 'The essentials: one-legged squats twice a week in the Aerobic phase and once in Threshold, then 5 min of core and stretching once racing starts. No heavy lifting.',
+    full: 'His 2019–20 build-up: one-legged squats and heavy squats + deadlifts in the Aerobic phase, one squat session a week in Threshold, then 5 min of core and stretching once racing starts.',
+  };
+
   // --- Controls ------------------------------------------------------------------
   function renderControls() {
     const race = P.RACES[state.race];
@@ -357,6 +368,9 @@
           : 'Sets your easy and threshold paces. Without it, they are estimated from your goal time.';
     }
 
+    $('#strength-hint').textContent = STRENGTH_HINT[state.strength];
+    $('#longday-field').hidden = race.km < 50;
+
     $('#extra-race').hidden = state.mode !== 'race';
     $('#extra-season').hidden = state.mode !== 'season';
     const Y = P.YEAR;
@@ -380,6 +394,7 @@
       weeks: state.weeks,
       season: state.season,
       strength: state.strength,
+      longDay: state.longDay,
       currentHours: currentHours(),
     });
     renderNowHint();
@@ -566,7 +581,8 @@
     $('#recent-time').addEventListener('input', (e) => { state.recentTime = e.target.value.trim(); render(); });
     $('#mode').addEventListener('change', (e) => { state.mode = e.target.value; render(); });
     $('#season').addEventListener('change', (e) => { state.season = e.target.value; render(); });
-    $('#strength').addEventListener('change', (e) => { state.strength = e.target.checked; render(); });
+    $('#strength').addEventListener('change', (e) => { state.strength = e.target.value; render(); });
+    $('#longday').addEventListener('change', (e) => { state.longDay = Number(e.target.value); render(); });
     $('#now').addEventListener('input', (e) => { state.now = e.target.value.trim(); render(); });
     $('#weeks').addEventListener('change', (e) => setWeeks(Number(e.target.value)));
     $('#weeks-dec').addEventListener('click', () => setWeeks(state.weeks - 1));
