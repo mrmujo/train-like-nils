@@ -300,6 +300,10 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .mode-extra[hidden] { display: none; }
+.mode-extra .hint { flex-basis: 100%; margin-top: -2px; }
+.date-input { width: auto; padding-top: 6px; padding-bottom: 6px; font-size: 15px; }
+.text-input:disabled { color: var(--ink-2); background: var(--surface-2); }
+.wk-date { margin-left: 8px; font-weight: 400; color: var(--muted); }
 
 .sub-label { font-size: 13px; color: var(--ink-2); }
 

@@ -7,7 +7,7 @@
   const SVG = 'http://www.w3.org/2000/svg';
 
   const state = { p: 30, race: 'marathon', time: '', mode: 'race', weeks: 16, season: 'aerobic', strength: 'full', now: '', longDay: 3,
-    recentKey: '10k', recentTime: '' };
+    recentKey: '10k', recentTime: '', raceDate: '', raceDow: 6 };
   const openWeeks = new Set([1]);
   let plan = null;
 
@@ -46,7 +46,10 @@
     if (q.has('time')) state.time = q.get('time').slice(0, 12);
     if (['race', 'cycle', 'year', 'season'].includes(q.get('mode'))) state.mode = q.get('mode');
     const w = Number(q.get('weeks'));
-    if (w >= 8 && w <= 30) state.weeks = Math.round(w);
+    if (w >= 8 && w <= P.MAX_WEEKS) state.weeks = Math.round(w);
+    if (isIsoDate(q.get('date'))) state.raceDate = q.get('date');
+    const rd = Number(q.get('day'));
+    if (q.has('day') && rd >= 0 && rd <= 6) state.raceDow = Math.round(rd);
     if (['aerobic', 'threshold', 'specific'].includes(q.get('season'))) state.season = q.get('season');
     if (q.get('strength') === '0') state.strength = 'none'; // links from before the chooser
     if (['none', 'base', 'full'].includes(q.get('st'))) state.strength = q.get('st');
@@ -60,8 +63,10 @@
   function writeHash() {
     const q = new URLSearchParams({ p: state.p, race: state.race, mode: state.mode });
     if (state.time) q.set('time', state.time);
-    if (state.mode === 'race') q.set('weeks', state.weeks);
+    if (state.mode === 'race' && !state.raceDate) q.set('weeks', state.weeks);
     if (state.mode === 'season') q.set('season', state.season);
+    else if (state.raceDate) q.set('date', state.raceDate);
+    else if (state.raceDow !== 6) q.set('day', state.raceDow);
     if (state.strength !== 'full') q.set('st', state.strength);
     if (P.RACES[state.race].km >= 50 && state.longDay !== 3) q.set('ld', state.longDay);
     if (state.now) q.set('now', state.now);
@@ -81,6 +86,34 @@
     $('#now').value = state.now;
     document.querySelector(`input[name="recent"][value="${state.recentKey}"]`).checked = true;
     $('#recent-time').value = state.recentTime;
+    $('#race-date').value = state.raceDate;
+    document.querySelector(`input[name="raceday"][value="${state.raceDow}"]`).checked = true;
+  }
+
+  function isIsoDate(v) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(v || '')) return false;
+    const [y, m, d] = v.split('-').map(Number);
+    const date = new Date(Date.UTC(y, m - 1, d));
+    return date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
+  }
+
+  const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  const dayDiff = (a, b) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 864e5);
+
+  // With a race date the race day comes from the date, Build to race runs from
+  // the coming Monday to race week, and week 1 is counted back from the race.
+  function schedule() {
+    if (state.mode === 'season' || !isIsoDate(state.raceDate)) return null;
+    const raceMonday = I.mondayOf(state.raceDate);
+    const until = dayDiff(comingMonday(), raceMonday) / 7 + 1; // weeks, race week included
+    if (until < 1) return { past: true };
+    return {
+      date: state.raceDate,
+      dow: dayDiff(raceMonday, state.raceDate),
+      raceMonday,
+      until,
+      weeks: Math.min(P.MAX_WEEKS, Math.max(8, until)),
+    };
   }
 
   function currentHours() {
@@ -284,11 +317,17 @@
         d.blocks.length && !single ? el('ul', { class: 'blocks' }, ...d.blocks.map(renderBlock)) : null) : null);
   }
 
+  function weekDate(start, index) {
+    const [y, m, d] = I.addDays(start, (index - 1) * 7).split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+  }
+
   function renderWeeks() {
+    const start = startDate();
     const nodes = plan.weeks.map((w) => {
       const det = el('details', { class: 'week', id: `week-${w.index}` },
         el('summary', null,
-          el('span', { class: 'wk-num' }, `Week ${w.index}`),
+          el('span', { class: 'wk-num' }, `Week ${w.index}`, start ? el('span', { class: 'wk-date' }, weekDate(start, w.index)) : null),
           el('span', { class: 'wk-meta' },
             el('span', { class: 'tag' }, el('span', { class: `swatch phase-${w.phase}` }), P.PHASES[w.phase].name),
             w.sub ? el('span', { class: 'wk-sub' }, w.sub) : null,
@@ -326,7 +365,7 @@
   };
 
   // --- Controls ------------------------------------------------------------------
-  function renderControls() {
+  function renderControls(sch) {
     const race = P.RACES[state.race];
     const dose = $('#dose');
     dose.style.setProperty('--fill', `${((state.p - 10) / 90) * 100}%`);
@@ -371,32 +410,40 @@
     $('#strength-hint').textContent = STRENGTH_HINT[state.strength];
     $('#longday-field').hidden = race.km < 50;
 
-    $('#extra-race').hidden = state.mode !== 'race';
+    const dated = Boolean(sch && !sch.past);
+    $('#extra-date').hidden = state.mode === 'season';
+    $('#race-date-clear').hidden = !state.raceDate;
+    $('#extra-race').hidden = state.mode !== 'race' || dated;
+    $('#extra-day').hidden = state.mode === 'season' || dated;
     $('#extra-season').hidden = state.mode !== 'season';
+    const weeks = dated && state.mode === 'race' ? sch.weeks : state.weeks;
     const Y = P.YEAR;
-    const c = state.mode === 'race' || state.mode === 'cycle' ? P.allocate(state.mode === 'cycle' ? 12 : state.weeks) : null;
+    const c = state.mode === 'race' || state.mode === 'cycle' ? P.allocate(state.mode === 'cycle' ? 12 : weeks) : null;
     $('#mode-hint').textContent = c
       ? `${c.aerobic} Aerobic → ${c.threshold} Threshold → ${c.specific} Specific → ${c.peak} Overreach & taper`
       : state.mode === 'year'
         ? `52 weeks like his: ${Y.aerobic} Aerobic → ${Y.threshold} Threshold → ${Y.blocks} Specific blocks with tune-up races and Aerobic 2.0 resets → ${Y.peak} Overreach & taper`
         : P.PHASES[state.season].blurb;
-    return { goalSec, recent: recentSec ? { key: state.recentKey, sec: recentSec } : null };
+    return { goalSec, recent: recentSec ? { key: state.recentKey, sec: recentSec } : null, weeks, raceDow: dated ? sch.dow : state.raceDow };
   }
 
   function render() {
-    const { goalSec, recent } = renderControls();
+    const sch = schedule();
+    const { goalSec, recent, weeks, raceDow } = renderControls(sch);
     plan = P.buildPlan({
       p: state.p / 100,
       race: state.race,
       goalSec,
       recent,
       mode: state.mode,
-      weeks: state.weeks,
+      weeks,
       season: state.season,
       strength: state.strength,
       longDay: state.longDay,
       currentHours: currentHours(),
+      raceDow,
     });
+    renderSchedule(sch);
     renderNowHint();
     renderExportDates();
     renderPaces();
@@ -439,19 +486,47 @@
     return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
   }
 
+  function comingMonday() { return I.mondayOf(I.addDays(isoToday(), 6)); } // or today, if it is one
+
   function startDate() {
     const v = $('#start').value;
-    return /^\d{4}-\d{2}-\d{2}$/.test(v) ? I.mondayOf(v) : null;
+    return isIsoDate(v) ? I.mondayOf(v) : null;
+  }
+
+  const weeksText = (n) => `${n} week${n === 1 ? '' : 's'}`;
+
+  // The race date sets week 1, so the start field follows it and is locked.
+  function renderSchedule(sch) {
+    const hint = $('#date-hint');
+    const start = $('#start');
+    hint.classList.toggle('error', Boolean(sch && sch.past));
+    start.disabled = Boolean(sch && !sch.past);
+    if (!sch) { hint.textContent = 'Optional. Sets the race day and when week 1 starts.'; return; }
+    if (sch.past) { hint.textContent = 'That date has passed. Pick one after this week.'; return; }
+    const n = plan.weeks.length;
+    const first = I.addDays(sch.raceMonday, -(n - 1) * 7);
+    start.value = first;
+    const day = `${DAY_NAMES[sch.dow]}, ${weeksText(sch.until)} away.`;
+    if (sch.until < n) {
+      const join = n - sch.until + 1;
+      hint.textContent = state.mode === 'race'
+        ? `${day} The shortest plan is 8 weeks, so join it in week ${join}.`
+        : `${day} This ${n}-week plan would have started ${fmtDate(first)}, so join it in week ${join} or pick Build to race.`;
+    } else if (state.mode === 'race' && sch.until > n) {
+      hint.textContent = `${day} The longest plan is ${n} weeks, so week 1 starts ${fmtDate(first)}. Run easy until then.`;
+    } else {
+      hint.textContent = `${day} Week 1 starts ${fmtDate(first)}.`;
+    }
   }
 
   function renderExportDates() {
     const hint = $('#export-dates');
     const start = startDate();
     if (!start) { hint.textContent = 'Pick a date. Week 1 always starts on a Monday.'; return; }
-    const end = I.addDays(start, plan.weeks.length * 7 - 1);
-    const hasRace = plan.weeks.some((w) => w.days.some((d) => d.goal));
-    const snapped = start !== $('#start').value ? ' (moved to that week’s Monday)' : '';
-    hint.textContent = `Week 1 starts ${fmtDate(start)}${snapped}. ${hasRace ? `Race day: ${fmtDate(end)}.` : `Week ${plan.weeks.length} ends ${fmtDate(end)}.`}`;
+    const n = plan.weeks.length;
+    const end = plan.raceDow === null ? I.addDays(start, n * 7 - 1) : I.addDays(start, (n - 1) * 7 + plan.raceDow);
+    const why = $('#start').disabled ? ' (set by your race date)' : start !== $('#start').value ? ' (moved to that week’s Monday)' : '';
+    hint.textContent = `Week 1 starts ${fmtDate(start)}${why}. ${plan.raceDow === null ? `Week ${n} ends ${fmtDate(end)}.` : `Race day: ${fmtDate(end)}.`}`;
   }
 
   function setStatus(text, error) {
@@ -558,7 +633,7 @@
   }
 
   function setWeeks(n) {
-    state.weeks = Math.min(30, Math.max(8, Math.round(n) || 16));
+    state.weeks = Math.min(P.MAX_WEEKS, Math.max(8, Math.round(n) || 16));
     $('#weeks').value = state.weeks;
     render();
   }
@@ -587,6 +662,14 @@
     $('#weeks').addEventListener('change', (e) => setWeeks(Number(e.target.value)));
     $('#weeks-dec').addEventListener('click', () => setWeeks(state.weeks - 1));
     $('#weeks-inc').addEventListener('click', () => setWeeks(state.weeks + 1));
+    $('#race-date').addEventListener('change', (e) => { state.raceDate = isIsoDate(e.target.value) ? e.target.value : ''; render(); });
+    $('#race-date-clear').addEventListener('click', () => {
+      state.raceDate = '';
+      $('#race-date').value = '';
+      render();
+      $('#race-date').focus();
+    });
+    $('#raceday').addEventListener('change', (e) => { state.raceDow = Number(e.target.value); render(); });
 
     $('#toggle-all').addEventListener('click', () => {
       const open = !allOpen();
@@ -596,8 +679,8 @@
     });
 
     $('#print').addEventListener('click', () => window.print());
-    $('#start').value = I.mondayOf(I.addDays(isoToday(), 6)); // the coming Monday, or today if it is one
-    $('#start').addEventListener('change', renderExportDates);
+    $('#start').value = comingMonday();
+    $('#start').addEventListener('change', render); // week cards show their dates
     $('#send').addEventListener('click', sendToIntervals);
     $('#remove').addEventListener('click', removeFromIntervals);
 

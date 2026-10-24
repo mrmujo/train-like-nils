@@ -25,6 +25,7 @@
   // blocks. After each block of races came two weeks of "Aerobic 2.0".
   const YEAR = { aerobic: 20, threshold: 10, blocks: 3, blockWeeks: 5, reset: 2, peak: 3 };
   const YEAR_RAMP = [0.7, 0.8, 0.9]; // "It took a few months to get there."
+  const MAX_WEEKS = 52;               // longest build to a single race
   const RAMP_RATE = 1.1;              // from your current volume: +10 % a week
   // At full Nils every day is a 5–7 h day. Scaled down evenly that long-duration
   // stimulus disappears, so for 50K+ one day a week carries a third of the running.
@@ -488,17 +489,20 @@
     return days.concat(RESTS_WEEKEND());
   }
 
-  // Rest, easy, prep, rest, prep, race.
-  function raceWeek(ctx) {
-    return [
-      restDay('Rest. Let the overreach soak in.'),
-      easyDay(30, 'Easy 30 min'),
-      restDay(),
-      prepDay(ctx),
-      restDay(),
-      prepDay(ctx),
-      raceDay(ctx),
-    ];
+  // His example ends with a Friday race: two days off after the overreach, then
+  // easy 30 min, prep, rest, prep, race. Counted back from race day so any weekday
+  // works: extra days before the easy run are rest, and a race early in the week
+  // cuts the overreach short. Returns the overreach week and the race week.
+  function taperWeeks(ctx, overreach, raceDow) {
+    const days = overreach.concat([0, 1, 2, 3, 4, 5, 6].map(() => restDay()));
+    const r = 7 + raceDow;
+    for (let i = r - 6; i < 7; i++) if (days[i].type !== 'rest') days[i] = restDay();
+    days[r - 4] = easyDay(30, 'Easy 30 min');
+    days[r - 3] = prepDay(ctx);
+    days[r - 1] = prepDay(ctx);
+    days[r] = raceDay(ctx);
+    days[days.findIndex((d, i) => i > 0 && d.type === 'rest')].note = 'Rest. Let the overreach soak in.';
+    return [days.slice(0, 7), days.slice(7)];
   }
 
   // --- Phases -------------------------------------------------------------------
@@ -578,16 +582,18 @@
     const c1 = ctx.week();
     const c2 = ctx.week();
     const c3 = ctx.week();
+    const [overreach, race] = taperWeeks(c3, overreachWeek2(c2), ctx.raceDow);
     return [
       { phase: 'peak', sub: 'Overreach: six days on', p: c1.p, days: overreachWeek1(c1) },
-      { phase: 'peak', sub: 'Overreach, easing off', p: c2.p, days: overreachWeek2(c2) },
-      { phase: 'peak', sub: 'Race week', p: c3.p, days: raceWeek(c3) },
+      { phase: 'peak', sub: 'Overreach, easing off', p: c2.p, days: overreach },
+      { phase: 'peak', sub: 'Race week', p: c3.p, days: race },
     ];
   }
 
   /**
    * opts: { p: 0.1–1, race: key, goalSec?, mode: 'race' | 'cycle' | 'year' | 'season', weeks?, season?,
-   *         strength?: 'none' | 'base' | 'full', currentHours?, recent?: { key, sec }, longDay?: 0–4 (50K+ only) }
+   *         strength?: 'none' | 'base' | 'full', currentHours?, recent?: { key, sec }, longDay?: 0–4 (50K+ only),
+   *         raceDow?: 0–6 (Mon–Sun, default Sun) }
    */
   function buildPlan(opts) {
     const race = RACES[opts.race] || RACES.marathon;
@@ -597,9 +603,11 @@
     // With a current volume, week 1 starts there and climbs 10 % a week to the target.
     const startP = opts.currentHours > 0 ? Math.max(MIN_P, (opts.currentHours * 60) / RUN_WEEK_100) : null;
     const longDay = race.km >= 50 ? Math.min(4, Math.max(0, Math.round(opts.longDay === undefined ? 3 : opts.longDay))) : null;
+    const raceDow = Number.isInteger(opts.raceDow) && opts.raceDow >= 0 && opts.raceDow <= 6 ? opts.raceDow : 6;
     let weekNo = 0;
     const ctx = {
       race,
+      raceDow,
       week() {
         const wp = startP ? Math.min(p, startP * Math.pow(RAMP_RATE, weekNo)) : p;
         weekNo += 1;
@@ -616,7 +624,7 @@
     } else if (opts.mode === 'year') {
       raw = yearPhases(ctx);
     } else {
-      const n = opts.mode === 'cycle' ? 12 : Math.min(30, Math.max(8, Math.round(opts.weeks || 16)));
+      const n = opts.mode === 'cycle' ? 12 : Math.min(MAX_WEEKS, Math.max(8, Math.round(opts.weeks || 16)));
       const c = allocate(n);
       raw = [].concat(
         aerobicPhase(ctx, c.aerobic, c.threshold > 0),
@@ -648,6 +656,7 @@
       paces: computePaces(race.key, goalSec, opts.recent),
       goalSec,
       startP,
+      raceDow: opts.mode === 'season' ? null : raceDow,
     };
   }
 
@@ -658,7 +667,7 @@
   }
 
   const api = {
-    RACES, RECENT_RACES, PHASES, DOW, DURATIONS, REPS, RESTS, YEAR,
+    RACES, RECENT_RACES, PHASES, DOW, DURATIONS, REPS, RESTS, YEAR, MAX_WEEKS,
     buildPlan, baseWeekMin, parseTime, parseRecent, computePaces, allocate, snap,
     fmtMin, fmtRep, fmtPace, fmtClock,
   };

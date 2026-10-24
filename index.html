@@ -90,12 +90,32 @@
             <label><input type="radio" name="mode" value="season"><span>One season</span></label>
           </div>
 
+          <div class="mode-extra" id="extra-date">
+            <label class="sub-label" for="race-date">Race date</label>
+            <input type="date" id="race-date" class="text-input date-input" aria-describedby="date-hint">
+            <button type="button" class="link-btn" id="race-date-clear" hidden>Clear</button>
+            <p class="hint" id="date-hint"></p>
+          </div>
+
           <div class="mode-extra" id="extra-race">
             <span class="sub-label" id="weeks-label">Weeks until race</span>
             <div class="stepper" role="group" aria-labelledby="weeks-label">
               <button type="button" id="weeks-dec" aria-label="Fewer weeks">−</button>
-              <input id="weeks" type="number" min="8" max="30" step="1" value="16" aria-labelledby="weeks-label">
+              <input id="weeks" type="number" min="8" max="52" step="1" value="16" aria-labelledby="weeks-label">
               <button type="button" id="weeks-inc" aria-label="More weeks">+</button>
+            </div>
+          </div>
+
+          <div class="mode-extra" id="extra-day">
+            <span class="sub-label" id="raceday-label">Race day</span>
+            <div class="chips chips-sm" id="raceday" role="radiogroup" aria-labelledby="raceday-label">
+              <label><input type="radio" name="raceday" value="0"><span>Mon</span></label>
+              <label><input type="radio" name="raceday" value="1"><span>Tue</span></label>
+              <label><input type="radio" name="raceday" value="2"><span>Wed</span></label>
+              <label><input type="radio" name="raceday" value="3"><span>Thu</span></label>
+              <label><input type="radio" name="raceday" value="4"><span>Fri</span></label>
+              <label><input type="radio" name="raceday" value="5"><span>Sat</span></label>
+              <label><input type="radio" name="raceday" value="6"><span>Sun</span></label>
             </div>
           </div>
 
@@ -152,7 +172,7 @@
       <ol class="export-steps">
         <li>Sign up at intervals.icu. In <strong>Settings</strong>, connect Garmin Connect and tick <strong>Upload planned workouts</strong>.</li>
         <li>Further down in Settings, under <strong>Developer settings</strong>, copy your API key.</li>
-        <li>Pick when week 1 starts, paste the key and send.</li>
+        <li>Pick when week 1 starts (a race date sets it for you), paste the key and send.</li>
       </ol>
       <div class="export-row">
         <div class="field">
