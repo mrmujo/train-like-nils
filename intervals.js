@@ -97,8 +97,10 @@
       const goal = day.goal && plan.goalSec
         ? `Goal ${P.fmtClock(plan.goalSec)}${plan.paces && plan.paces.race ? ` (${P.fmtPace(plan.paces.race)}/km)` : ''}. `
         : '';
+      // intervals.icu's own race categories: A for the goal race, B for tune-ups.
       return [{
-        category: 'NOTE',
+        category: day.goal ? 'RACE_A' : 'RACE_B',
+        type: 'Run',
         start_date_local: `${date}T00:00:00`,
         name: day.title,
         description: `${goal}${day.note || ''}${day.fuel ? ` ${day.fuel.text}` : ''}`.trim(),
