@@ -276,6 +276,12 @@
   }
 
   // --- Week cards --------------------------------------------------------------
+  function blockDetail(b) {
+    if (!b.test) return b.detail;
+    const steady = plan.paces ? ` (${P.fmtPace(plan.paces.steady)})` : '';
+    return `Starts with the daily test: 5 min easy, 5 min steady${steady}.${b.detail ? ` ${b.detail}` : ''}`;
+  }
+
   function renderBlock(b) {
     const work = b.zone === 'threshold' || b.zone === 'race' || b.zone === 'speed' || b.zone === 'strength';
     const pace = paceText(b.zone, plan.paces) || (work && EFFORT[b.zone]) || '';
@@ -285,7 +291,7 @@
         b.session ? el('span', { class: 'session' }, b.session) : null,
         el('span', { class: 'b-label' }, b.label),
         pace ? el('span', { class: 'b-pace' }, pace) : null,
-        b.detail ? el('span', { class: 'b-detail' }, b.detail) : null));
+        blockDetail(b) ? el('span', { class: 'b-detail' }, blockDetail(b)) : null));
   }
 
   function fuelBadge() {
@@ -302,7 +308,7 @@
     // A one-block day (an easy run) needs no block list: put its pace under the title.
     const single = d.blocks.length === 1 && !d.blocks[0].session ? d.blocks[0] : null;
     const meta = single
-      ? [single.label === 'Easy' ? '' : single.label, paceText(single.zone, plan.paces), single.detail].filter(Boolean).join(' · ')
+      ? [single.label === 'Easy' ? '' : single.label, paceText(single.zone, plan.paces), blockDetail(single)].filter(Boolean).join(' · ')
       : '';
     const fuel = d.fuel;
     const hasBody = meta || fuel || d.note || (d.blocks.length && !single);

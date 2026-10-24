@@ -199,10 +199,7 @@
     }
     // Runs without a warm-up start with the same test inside their first 10 minutes.
     const first = blocks[0];
-    if (first && first.zone !== 'warmup' && first.min >= 20 && !first.test) {
-      first.test = true;
-      first.detail = `Starts with the daily test: 5 min easy, 5 min steady.${first.detail ? ` ${first.detail}` : ''}`;
-    }
+    if (first && first.zone !== 'warmup' && first.min >= 20) first.test = true;
     const day = { type, title, blocks, totalMin, note: note || '' };
     if (long) day.long = true; // one continuous run, never split into AM + PM
     return day;
