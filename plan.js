@@ -176,8 +176,11 @@
     return b;
   }
 
+  // "I always started my bike and ice sessions with 5 minutes at 200W followed by 6 minutes at 260W."
+  const TEST = '5 min easy, then 5 min steady at the same pace every day. Note your heart rate.';
+
   function warmup() {
-    return block(10, 'Warm-up', 'warmup', '5 min easy, then 5 min steady at the same pace every day. Note your heart rate.');
+    return block(10, 'Warm-up', 'warmup', TEST);
   }
 
   function set(reps, len, rest, zone) {
@@ -193,6 +196,12 @@
         blocks[0].session = 'AM';
         last.session = 'PM';
       }
+    }
+    // Runs without a warm-up start with the same test inside their first 10 minutes.
+    const first = blocks[0];
+    if (first && first.zone !== 'warmup' && first.min >= 20 && !first.test) {
+      first.test = true;
+      first.detail = `Starts with the daily test: 5 min easy, 5 min steady.${first.detail ? ` ${first.detail}` : ''}`;
     }
     const day = { type, title, blocks, totalMin, note: note || '' };
     if (long) day.long = true; // one continuous run, never split into AM + PM

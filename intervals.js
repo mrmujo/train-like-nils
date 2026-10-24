@@ -50,9 +50,10 @@
   // Lines of workout text for one block. Repeat blocks need a blank line
   // before and after them.
   function blockLines(b, t) {
-    if (b.label === 'Warm-up') {
-      return [step('Warm-up', 5, t.easy), step('Steady test, note your HR', 5, t.steady)];
-    }
+    const test = [step('Warm-up', 5, t.easy), step('Steady test, note your HR', 5, t.steady)];
+    if (b.label === 'Warm-up') return test;
+    // An easy run, long run or rehearsal starts with the test inside its first 10 min.
+    if (b.test) return test.concat(blockLines(Object.assign({}, b, { test: false, min: b.min - 10 }), t));
     if (b.reps) {
       const name = WORK_NAME[b.zone] || 'Work';
       const work = step(name, b.len, t[b.zone]);
