@@ -57,7 +57,17 @@
           <label><input type="radio" name="longday" value="3"><span>Thu</span></label>
           <label><input type="radio" name="longday" value="4"><span>Fri</span></label>
         </div>
-        <p class="hint">For 50K and longer, one weekday carries about a third of the week’s running. Nils’s long days were Monday and Thursday. Weekends stay off.</p>
+        <p class="hint">For 50K and longer, one weekday carries about a third of the week’s running. Nils’s long days were Monday and Thursday. Weekends stay off, unless you pick a long Saturday.</p>
+      </fieldset>
+
+      <fieldset class="field" id="longsat-field" hidden>
+        <legend>Long Saturday <span class="opt">not from Nils</span></legend>
+        <div class="chips chips-sm" id="longsat">
+          <label><input type="radio" name="longsat" value=""><span>Never</span></label>
+          <label><input type="radio" name="longsat" value="even"><span>Even weeks</span></label>
+          <label><input type="radio" name="longsat" value="odd"><span>Odd weeks</span></label>
+        </div>
+        <p class="hint" id="longsat-hint"></p>
       </fieldset>
 
       <div class="field-row">

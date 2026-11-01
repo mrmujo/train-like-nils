@@ -34,6 +34,10 @@
   // His Aerobic-season endurance challenges (100 km run, stage race): one optional big day.
   const CHALLENGE = { factor: 1.5, cap: { '50k': 300, '100k': 420, '100mi': 480 } };
   const MIN_P = 0.04;
+  // Not from Nils: on every other weekend the long day moves to Saturday and grows
+  // 30 min each time, for a 100-miler from 3 h (about 30 km) to 5 h (40–50 km).
+  const LONG_SAT = { '50k': [120, 180], '100k': [150, 240], '100mi': [180, 300] };
+  const LONG_SAT_STEP = 30;
 
   const RACES = {
     '10k':      { key: '10k', label: '10K', km: 10, rep: 5, rest: 1.5, example: '45:00', tuneUp: '10K' },
@@ -511,6 +515,47 @@
     return [days.slice(0, 7), days.slice(7)];
   }
 
+  // --- Long Saturdays (not from Nils) ----------------------------------------------
+  const LONG_SAT_NOTE = 'Long Saturday, not from Nils: more time on your free weekend. Rest Sunday and Monday.';
+
+  // The long day as a run of at least `target` minutes. A session keeps its work
+  // and the easy finish takes the extra time.
+  function longer(day, target) {
+    const min = Math.max(target, day.totalMin);
+    let d;
+    if (day.type === 'easy' || day.type === 'long') d = longRunDay(min, day.long ? day.title : undefined, day.note);
+    else if (day.type === 'rehearsal') d = rehearsalDay(null, min, day.long ? day.title : undefined, true);
+    else if (day.long && day.totalMin >= target) d = day;
+    else {
+      const blocks = day.blocks.slice(0, -1).map((b) => {
+        const c = Object.assign({}, b);
+        delete c.session; // one continuous run, not AM + PM
+        return c;
+      });
+      const title = day.long ? day.title : `${day.title} + long run`;
+      d = withEasy(day.type, title, blocks, min, day.blocks[day.blocks.length - 1].detail, day.note, true);
+    }
+    return Object.assign({}, d, { note: [d.note, LONG_SAT_NOTE].filter(Boolean).join(' ') });
+  }
+
+  // In weeks whose index has `parity`, the long day moves to Saturday, it takes the
+  // next Monday's session, and that Monday is rest. Weeks without a long day
+  // (tune-up races, overreach, race week) are left alone, and so are the weeks either side.
+  function longSaturdays(raw, parity, race) {
+    const [from, to] = LONG_SAT[race.key];
+    let k = 0;
+    raw.forEach((a, i) => {
+      const b = raw[i + 1];
+      const before = raw[i - 1];
+      if (i % 2 !== parity || !b || a.longDay == null || b.longDay == null || (before && before.longDay == null)) return;
+      a.days[5] = longer(a.days[a.longDay], Math.min(to, from + LONG_SAT_STEP * k));
+      a.days[a.longDay] = b.days[0];
+      b.days[0] = restDay('Rest after the long Saturday.');
+      a.sub = a.sub ? `${a.sub}, long Saturday` : 'Long Saturday';
+      k += 1;
+    });
+  }
+
   // --- Phases -------------------------------------------------------------------
   function allocate(n) {
     const peak = 3;
@@ -599,7 +644,8 @@
   /**
    * opts: { p: 0.1–1, race: key, goalSec?, mode: 'race' | 'cycle' | 'year' | 'season', weeks?, season?,
    *         strength?: 'none' | 'base' | 'full', currentHours?, recent?: { key, sec }, longDay?: 0–4 (50K+ only),
-   *         raceDow?: 0–6 (Mon–Sun, default Sun) }
+   *         raceDow?: 0–6 (Mon–Sun, default Sun), longSat?: 0 | 1 (50K+ only: long Saturdays in
+   *         weeks 1, 3, 5… or 2, 4, 6…) }
    */
   function buildPlan(opts) {
     const race = RACES[opts.race] || RACES.marathon;
@@ -641,6 +687,7 @@
     }
     const strength = opts.strength === false || opts.strength === 'none' ? 'none' : opts.strength === 'base' ? 'base' : 'full';
     if (strength !== 'none') raw.forEach((w) => addStrength(w, strength));
+    if (longDay !== null && (opts.longSat === 0 || opts.longSat === 1)) longSaturdays(raw, opts.longSat, race);
     raw.forEach((w) => w.days.forEach((d) => { d.fuel = fuelFor(d, race); }));
     const counts = { aerobic: 0, threshold: 0, specific: 0, peak: 0 };
     raw.forEach((w) => { counts[w.phase] += 1; });
@@ -673,7 +720,7 @@
   }
 
   const api = {
-    RACES, RECENT_RACES, PHASES, DOW, DURATIONS, REPS, RESTS, YEAR, MAX_WEEKS,
+    RACES, RECENT_RACES, PHASES, DOW, DURATIONS, REPS, RESTS, YEAR, MAX_WEEKS, LONG_SAT,
     buildPlan, baseWeekMin, parseTime, parseRecent, computePaces, allocate, snap,
     fmtMin, fmtRep, fmtPace, fmtClock,
   };

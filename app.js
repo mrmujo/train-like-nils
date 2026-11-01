@@ -7,7 +7,7 @@
   const SVG = 'http://www.w3.org/2000/svg';
 
   const state = { p: 30, race: 'marathon', time: '', mode: 'race', weeks: 16, season: 'aerobic', strength: 'full', now: '', longDay: 3,
-    recentKey: '10k', recentTime: '', raceDate: '', raceDow: 6 };
+    recentKey: '10k', recentTime: '', raceDate: '', raceDow: 6, longSat: '' };
   const openWeeks = new Set([1]);
   let plan = null;
 
@@ -55,6 +55,7 @@
     if (['none', 'base', 'full'].includes(q.get('st'))) state.strength = q.get('st');
     const ld = Number(q.get('ld'));
     if (q.has('ld') && ld >= 0 && ld <= 4) state.longDay = Math.round(ld);
+    if (isIsoDate(q.get('sat')) && I.mondayOf(q.get('sat')) === I.addDays(q.get('sat'), -5)) state.longSat = q.get('sat');
     if (q.has('now')) state.now = q.get('now').slice(0, 5);
     if (P.RECENT_RACES[q.get('rk')]) state.recentKey = q.get('rk');
     if (q.has('rt')) state.recentTime = q.get('rt').slice(0, 12);
@@ -69,6 +70,7 @@
     else if (state.raceDow !== 6) q.set('day', state.raceDow);
     if (state.strength !== 'full') q.set('st', state.strength);
     if (P.RACES[state.race].km >= 50 && state.longDay !== 3) q.set('ld', state.longDay);
+    if (P.RACES[state.race].km >= 50 && state.longSat) q.set('sat', state.longSat);
     if (state.now) q.set('now', state.now);
     if (state.recentTime) { q.set('rk', state.recentKey); q.set('rt', state.recentTime); }
     history.replaceState(null, '', '#' + q.toString().replace(/%3A/g, ':'));
@@ -83,6 +85,7 @@
     $('#weeks').value = state.weeks;
     document.querySelector(`input[name="strength"][value="${state.strength}"]`).checked = true;
     document.querySelector(`input[name="longday"][value="${state.longDay}"]`).checked = true;
+    document.querySelector(`input[name="longsat"][value="${longSatWeeks()}"]`).checked = true;
     $('#now').value = state.now;
     document.querySelector(`input[name="recent"][value="${state.recentKey}"]`).checked = true;
     $('#recent-time').value = state.recentTime;
@@ -114,6 +117,40 @@
       until,
       weeks: Math.min(P.MAX_WEEKS, Math.max(8, until)),
     };
+  }
+
+  // --- Long Saturdays ---------------------------------------------------------------
+  // Free weekends come every other week, so the setting is kept as one long Saturday
+  // and the rest follow every 14 days. "Even weeks" picks the next Saturday in an even
+  // week, and keeps going when a 53-week year turns it into odd weeks.
+  function isoWeek(iso) {
+    const [y, m, d] = iso.split('-').map(Number);
+    const t = new Date(Date.UTC(y, m - 1, d));
+    t.setUTCDate(t.getUTCDate() - ((t.getUTCDay() + 6) % 7) + 3); // that week's Thursday
+    const year = t.getUTCFullYear();
+    return { year, week: 1 + Math.floor((t - Date.UTC(year, 0, 1)) / 6048e5) };
+  }
+
+  const parityOf = (iso) => (isoWeek(iso).week % 2 ? 'odd' : 'even');
+  const thisSaturday = () => I.addDays(I.mondayOf(isoToday()), 5);
+  const isLongSat = (sat) => state.longSat !== '' && dayDiff(state.longSat, sat) % 14 === 0;
+
+  function longSatFrom(weeks) {
+    const sat = thisSaturday();
+    return parityOf(sat) === weeks ? sat : I.addDays(sat, 7);
+  }
+
+  // What the chooser shows: the week numbers the next long Saturday falls in.
+  function longSatWeeks() {
+    if (!state.longSat) return '';
+    const sat = thisSaturday();
+    return parityOf(isLongSat(sat) ? sat : I.addDays(sat, 7));
+  }
+
+  // 0 or 1: whether the plan's long Saturdays are in weeks 1, 3, 5… or 2, 4, 6….
+  function longSatParity(start) {
+    if (!state.longSat || !start || P.RACES[state.race].km < 50) return null;
+    return isLongSat(I.addDays(start, 5)) ? 0 : 1;
   }
 
   function currentHours() {
@@ -415,6 +452,7 @@
 
     $('#strength-hint').textContent = STRENGTH_HINT[state.strength];
     $('#longday-field').hidden = race.km < 50;
+    $('#longsat-field').hidden = race.km < 50;
 
     const dated = Boolean(sch && !sch.past);
     $('#extra-date').hidden = state.mode === 'season';
@@ -436,7 +474,7 @@
   function render() {
     const sch = schedule();
     const { goalSec, recent, weeks, raceDow } = renderControls(sch);
-    plan = P.buildPlan({
+    const opts = {
       p: state.p / 100,
       race: state.race,
       goalSec,
@@ -448,14 +486,45 @@
       longDay: state.longDay,
       currentHours: currentHours(),
       raceDow,
-    });
+    };
+    plan = P.buildPlan(opts);
+    // Which weeks get the long Saturday depends on the dates, so build again once week 1 is known.
+    const start = sch && !sch.past ? I.addDays(sch.raceMonday, -(plan.weeks.length - 1) * 7) : startDate();
+    opts.longSat = longSatParity(start);
+    if (opts.longSat !== null) plan = P.buildPlan(opts);
     renderSchedule(sch);
+    renderLongSatHint(start);
     renderNowHint();
     renderExportDates();
     renderPaces();
     renderOverview();
     renderWeeks();
     writeHash();
+  }
+
+  const shortDate = (iso) => {
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+  };
+
+  function renderLongSatHint(start) {
+    const hint = $('#longsat-hint');
+    const ramp = P.LONG_SAT[state.race];
+    if (!ramp) return;
+    if (!state.longSat || !start) {
+      hint.textContent = `On your free weekends the long run moves to Saturday and grows 30 min each time, from ${P.fmtMin(ramp[0])} to ${P.fmtMin(ramp[1])}. The weekday it leaves takes the next Monday’s session, and that Monday is rest.`;
+      return;
+    }
+    const sats = plan.weeks.filter((w) => w.days[5].long).map((w) => I.addDays(start, (w.index - 1) * 7 + 5));
+    if (!sats.length) { hint.textContent = 'This plan has no weeks for a long Saturday.'; return; }
+    const upcoming = sats.filter((s) => s >= isoToday());
+    const list = (upcoming.length ? upcoming : sats).slice(0, 3).map(shortDate).join(', ');
+    // A 53-week year puts two odd weeks in a row, and the free weekends keep alternating.
+    const flip = sats.find((s) => parityOf(s) !== parityOf(sats[0]));
+    const turn = flip
+      ? ` ${isoWeek(I.addDays(flip, -14)).year} has 53 weeks, so from ${shortDate(flip)} they are in ${parityOf(flip)} weeks.`
+      : '';
+    hint.textContent = `Long Saturdays: ${list} and every other week after that.${turn} Never in the last three weeks.`;
   }
 
   function renderNowHint() {
@@ -685,6 +754,7 @@
     $('#season').addEventListener('change', (e) => { state.season = e.target.value; render(); });
     $('#strength').addEventListener('change', (e) => { state.strength = e.target.value; render(); });
     $('#longday').addEventListener('change', (e) => { state.longDay = Number(e.target.value); render(); });
+    $('#longsat').addEventListener('change', (e) => { state.longSat = e.target.value ? longSatFrom(e.target.value) : ''; render(); });
     $('#now').addEventListener('input', (e) => { state.now = e.target.value.trim(); render(); });
     $('#weeks').addEventListener('change', (e) => setWeeks(Number(e.target.value)));
     $('#weeks-dec').addEventListener('click', () => setWeeks(state.weeks - 1));
