@@ -571,6 +571,27 @@
     return known ? removed : null;
   }
 
+  // The key is kept in this browser only when Remember is ticked.
+  const KEY_STORE = 'train-like-nils:intervals-key';
+
+  function loadKey() {
+    try {
+      const saved = localStorage.getItem(KEY_STORE);
+      if (saved) {
+        $('#apikey').value = saved;
+        $('#remember-key').checked = true;
+      }
+    } catch (e) { /* storage blocked: the key is typed each time */ }
+  }
+
+  function saveKey() {
+    try {
+      const key = $('#apikey').value.trim();
+      if ($('#remember-key').checked && key) localStorage.setItem(KEY_STORE, key);
+      else localStorage.removeItem(KEY_STORE);
+    } catch (e) { /* storage blocked */ }
+  }
+
   function apiKey() {
     const key = $('#apikey').value.trim();
     if (!key) setStatus('Paste your intervals.icu API key first.', true);
@@ -687,6 +708,9 @@
     $('#print').addEventListener('click', () => window.print());
     $('#start').value = comingMonday();
     $('#start').addEventListener('change', render); // week cards show their dates
+    loadKey();
+    $('#apikey').addEventListener('input', saveKey);
+    $('#remember-key').addEventListener('change', saveKey);
     $('#send').addEventListener('click', sendToIntervals);
     $('#remove').addEventListener('click', removeFromIntervals);
 

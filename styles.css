@@ -718,6 +718,17 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .export-row .text-input { max-width: none; }
+.field > .remember {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 0;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--muted);
+  cursor: pointer;
+}
+.remember input { width: 16px; height: 16px; margin: 0; accent-color: var(--focus); }
 .export .hint { margin-top: 0; max-width: 70ch; }
 
 .primary-btn {
